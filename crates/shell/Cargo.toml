@@ -1,0 +1,25 @@
+[package]
+name = "oneoffice"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "OneOffice shell: documents, spreadsheets and presentations in one window."
+publish = false
+
+[lib]
+name = "oneoffice"
+path = "src/lib.rs"
+
+[[bin]]
+name = "oneoffice"
+path = "src/main.rs"
+
+[dependencies]
+eframe.workspace = true
+egui.workspace = true
+egui_extras.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+rfd.workspace = true

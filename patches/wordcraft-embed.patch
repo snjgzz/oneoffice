@@ -1,0 +1,305 @@
+diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
+index b48a679..8d30b2a 100644
+--- a/crates/ui-egui/src/dialogs.rs
++++ b/crates/ui-egui/src/dialogs.rs
+@@ -1291,7 +1291,7 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
+         Dialog::Organizer { .. } => "Organizer",
+         Dialog::Layout(d) => d.title(),
+     };
+-    let id = egui::Id::new(("dialog", title));
++    let id = app.scope(("dialog", title));
+     let shown = place_dialog(ctx, id, egui::Window::new(tl!(title)).id(id).collapsible(false).resizable(false)).open(&mut open).show(ctx, |ui| {
+         ui.set_min_width(340.0);
+         close = body(app, ui, &mut d);
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index 6fd52cb..25e2cb2 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -540,6 +540,11 @@ pub struct WordApp {
+     /// the session's document, no document is open: the window shows no page and only the File
+     /// tab, Help and settings work. See [`WordApp::has_document`].
+     no_document: Option<u64>,
++    /// Host embed id. `Some` paints into a parent region: the title bar, viewport title,
++    /// theme and zoom stay with the host.
++    pub embed_salt: Option<u64>,
++    /// File › Close finished while embedded. The host reads this and closes its tab.
++    pub embed_closed: bool,
+ }
+ 
+ /// The answer to "Do you want to save changes?" (`ui.saveChanges`).
+@@ -635,9 +640,37 @@ impl WordApp {
+             info_editing: None,
+             recovery_seen: false,
+             no_document: None,
++            embed_salt: None,
++            embed_closed: false,
+         }
+     }
+ 
++    /// Persistent widget id. Unsalted when this app owns the window; salted per host tab when embedded.
++    pub fn scope(&self, key: impl std::hash::Hash + std::fmt::Debug) -> egui::Id {
++        match self.embed_salt {
++            Some(salt) => egui::Id::new(("wordcraft-embed", salt, key)),
++            None => egui::Id::new(key),
++        }
++    }
++
++    /// Put this app's fonts back after another tab called `set_fonts`.
++    /// The host calls this after `logic` on the frame the tab becomes visible.
++    /// `ui` still skips one frame (`fonts_frames`), which is when egui applies the definitions.
++    pub fn prepare_embed_fonts(&mut self, ctx: &egui::Context) {
++        if self.embed_salt.is_none() {
++            return;
++        }
++        let lang = i18n::Lang::from_pref(&self.ui.language);
++        let system_cjk = self.fonts_system_cjk || self.want_system_cjk || lang.uses_cjk();
++        theme::install_fonts_language_extra(ctx, lang.prefers_hans(), lang.prefers_korean(), system_cjk, &self.canvas.ime_faces);
++        self.fonts_hans = lang.prefers_hans();
++        self.fonts_korean = lang.prefers_korean();
++        self.fonts_system_cjk = system_cjk;
++        self.styled = true;
++        self.fonts_frames = 1;
++        ctx.request_repaint();
++    }
++
+     pub fn with_control(mut self, rx: std::sync::mpsc::Receiver<ControlRequest>) -> Self {
+         self.control_rx = Some(rx);
+         self
+@@ -1239,7 +1272,11 @@ impl WordApp {
+             }
+         }
+         if req.get("close").is_some() {
+-            self.quit_requested = true;
++            if self.embed_salt.is_some() {
++                self.embed_closed = true;
++            } else {
++                self.quit_requested = true;
++            }
+         }
+     }
+ 
+@@ -1725,48 +1762,51 @@ impl WordApp {
+         // in this frame (dialog, drop, control channel) is picked up again at the end.
+         self.ensure_caption_fonts();
+         self.install_ui_fonts(ctx, lang);
+-        if let Some(answer) = self.desktop_theme.take_change() {
+-            self.desktop_dark = Some(answer);
+-        }
+-        // Both palettes are installed and egui picks one: with `System` it follows an OS appearance
+-        // change live (winit reports it and repaints, #311). Where winit is silent (Linux) the
+-        // desktop portal's answer fills in instead. The interface follows the Interface theme
+-        // setting alone; Dark page only changes how pages are drawn (#312).
+-        let effective = match self.ui.theme {
+-            theme::Appearance::System if ctx.system_theme().is_none() => match self.desktop_dark {
+-                Some(true) => theme::Appearance::Dark,
+-                Some(false) => theme::Appearance::Light,
+-                None => theme::Appearance::System,
+-            },
+-            other => other,
+-        };
+-        if self.applied_theme != Some(effective) {
+-            theme::apply(ctx, effective);
+-            self.applied_theme = Some(effective);
+-        }
+-        // Interface size (#475, #822): egui's zoom factor multiplies the display scale the system
+-        // reports (native pixels per point). Auto keeps that scale; a chosen size divides it back
+-        // out, so "100%" is one screen pixel per point even where the system's scale is a guess.
+-        // Recomputed every frame, so a move to a monitor with another scale keeps a chosen size.
+-        // Keyboard zoom is off (above), so nothing else changes the factor; `set_zoom_factor`
+-        // repaints only on change.
+-        self.native_scale = theme::usable_scale(ctx.native_pixels_per_point().unwrap_or(1.0));
+-        if let Some(native) = ctx.native_pixels_per_point()
+-            && let Some(old) = self.legacy_interface_size.take()
+-        {
+-            self.ui.interface_size = theme::migrate_legacy_interface_size(old, native);
+-        }
+-        let zoom = self.ui.interface_size.zoom_factor(self.native_scale);
+-        if ctx.zoom_factor() != zoom {
+-            ctx.set_zoom_factor(zoom);
+-        }
+-        // Animation effects: the host is asked every frame what the system says (it answers from
+-        // memory), so a change made in the system's settings is followed without a restart.
+-        self.read_system_animations();
+-        let animate = self.animations_on();
+-        if self.applied_animations != Some(animate) {
+-            theme::apply_animations(ctx, animate);
+-            self.applied_animations = Some(animate);
++        // Embedded: the host owns visuals, zoom and animation. Fonts above still install.
++        if self.embed_salt.is_none() {
++            if let Some(answer) = self.desktop_theme.take_change() {
++                self.desktop_dark = Some(answer);
++            }
++            // Both palettes are installed and egui picks one: with `System` it follows an OS appearance
++            // change live (winit reports it and repaints, #311). Where winit is silent (Linux) the
++            // desktop portal's answer fills in instead. The interface follows the Interface theme
++            // setting alone; Dark page only changes how pages are drawn (#312).
++            let effective = match self.ui.theme {
++                theme::Appearance::System if ctx.system_theme().is_none() => match self.desktop_dark {
++                    Some(true) => theme::Appearance::Dark,
++                    Some(false) => theme::Appearance::Light,
++                    None => theme::Appearance::System,
++                },
++                other => other,
++            };
++            if self.applied_theme != Some(effective) {
++                theme::apply(ctx, effective);
++                self.applied_theme = Some(effective);
++            }
++            // Interface size (#475, #822): egui's zoom factor multiplies the display scale the system
++            // reports (native pixels per point). Auto keeps that scale; a chosen size divides it back
++            // out, so "100%" is one screen pixel per point even where the system's scale is a guess.
++            // Recomputed every frame, so a move to a monitor with another scale keeps a chosen size.
++            // Keyboard zoom is off (above), so nothing else changes the factor; `set_zoom_factor`
++            // repaints only on change.
++            self.native_scale = theme::usable_scale(ctx.native_pixels_per_point().unwrap_or(1.0));
++            if let Some(native) = ctx.native_pixels_per_point()
++                && let Some(old) = self.legacy_interface_size.take()
++            {
++                self.ui.interface_size = theme::migrate_legacy_interface_size(old, native);
++            }
++            let zoom = self.ui.interface_size.zoom_factor(self.native_scale);
++            if ctx.zoom_factor() != zoom {
++                ctx.set_zoom_factor(zoom);
++            }
++            // Animation effects: the host is asked every frame what the system says (it answers from
++            // memory), so a change made in the system's settings is followed without a restart.
++            self.read_system_animations();
++            let animate = self.animations_on();
++            if self.applied_animations != Some(animate) {
++                theme::apply_animations(ctx, animate);
++                self.applied_animations = Some(animate);
++            }
+         }
+         if self.ctx.is_none() {
+             self.ctx = Some(ctx.clone());
+@@ -1847,14 +1887,16 @@ impl WordApp {
+             self.fonts_hans = lang.prefers_hans();
+             self.fonts_korean = lang.prefers_korean();
+             self.fonts_system_cjk = system_cjk;
+-            // Mod with -, = and 0 are Word shortcuts (optional hyphen, subscript, paragraph spacing);
+-            // egui's keyboard zoom would also scale the whole window on them. Zoom is View › Zoom.
+-            // egui quits on Command-Q, which is Ctrl+Q off the Mac: Word's Reset Paragraph
+-            // Formatting there (#1218). Keep ⌘Q, which only the Mac sends.
+-            ctx.options_mut(|o| {
+-                o.zoom_with_keyboard = false;
+-                o.quit_shortcuts = vec![egui::KeyboardShortcut::new(egui::Modifiers::MAC_CMD, egui::Key::Q)];
+-            });
++            if self.embed_salt.is_none() {
++                // Mod with -, = and 0 are Word shortcuts (optional hyphen, subscript, paragraph spacing);
++                // egui's keyboard zoom would also scale the whole window on them. Zoom is View › Zoom.
++                // egui quits on Command-Q, which is Ctrl+Q off the Mac: Word's Reset Paragraph
++                // Formatting there (#1218). Keep ⌘Q, which only the Mac sends.
++                ctx.options_mut(|o| {
++                    o.zoom_with_keyboard = false;
++                    o.quit_shortcuts = vec![egui::KeyboardShortcut::new(egui::Modifiers::MAC_CMD, egui::Key::Q)];
++                });
++            }
+             self.styled = true;
+         }
+     }
+@@ -1970,12 +2012,16 @@ impl WordApp {
+             backstage::show(self, ui);
+         } else if !self.has_document() {
+             // No document open (#1129): the ribbon greyed out but for Help, and no page.
+-            chrome::title_bar(self, ui);
++            if self.embed_salt.is_none() {
++                chrome::title_bar(self, ui);
++            }
+             ribbon::show(self, ui);
+             chrome::status_bar(self, ui);
+             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.canvas)).show(ui, |_| {});
+         } else {
+-            chrome::title_bar(self, ui);
++            if self.embed_salt.is_none() {
++                chrome::title_bar(self, ui);
++            }
+             if !self.session.view.focus_mode {
+                 ribbon::show(self, ui);
+                 chrome::status_bar(self, ui);
+@@ -1998,16 +2044,18 @@ impl WordApp {
+         if let Some(url) = self.canvas.open_url.take() {
+             ctx.open_url(egui::OpenUrl::new_tab(url));
+         }
+-        let title = if self.has_document() {
+-            format!("{}{} - WordCraft", self.title_stem(), if self.session.dirty { " •" } else { "" })
+-        } else {
+-            "WordCraft".to_string()
+-        };
+-        if title != self.sent_title {
+-            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+-            self.sent_title = title;
++        if self.embed_salt.is_none() {
++            let title = if self.has_document() {
++                format!("{}{} - WordCraft", self.title_stem(), if self.session.dirty { " •" } else { "" })
++            } else {
++                "WordCraft".to_string()
++            };
++            if title != self.sent_title {
++                ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
++                self.sent_title = title;
++            }
++            self.sync_full_screen(&ctx);
+         }
+-        self.sync_full_screen(&ctx);
+         self.frame_ms = now_ms() - t0;
+         // Typing and formatting land here, after `logic` has reported.
+         self.report_dirty();
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index d67361e..462ffbe 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -1,6 +1,6 @@
+ //! Design tokens (light and dark), UI fonts and the egui style.
+ 
+-use std::sync::Arc;
++use std::sync::{Arc, OnceLock};
+ 
+ use egui::{Align2, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Rect, Stroke, Visuals};
+ 
+@@ -514,9 +514,46 @@ pub fn font_definitions_language(prefer_hans: bool, prefer_korean: bool, system_
+     #[cfg(target_arch = "wasm32")]
+     let _ = system_cjk;
+     // Symbols and emoji fall back to egui's defaults (kept in the families).
++    merge_host_fonts(&mut fonts);
+     fonts
+ }
+ 
++/// Extra faces a host app injects (OneOffice's bundled CJK font). The first call wins.
++/// Empty unless [`set_host_fallback_fonts`] ran, so WordCraft's own tests stay stable.
++static HOST_FONTS: OnceLock<Vec<(String, FontData)>> = OnceLock::new();
++
++/// Registers faces merged into every WordCraft font chain. Call once, before the first frame
++/// that builds fonts. Each face is also placed first in the proportional and monospace families,
++/// which is what a host shell uses for its own chrome. Role chains keep the face at the end, so
++/// Latin interface fonts still win and the host face only fills glyphs they lack.
++pub fn set_host_fallback_fonts(fonts: Vec<(String, FontData)>) {
++    let _ = HOST_FONTS.set(fonts);
++}
++
++fn merge_host_fonts(fonts: &mut FontDefinitions) {
++    let Some(host) = HOST_FONTS.get() else { return };
++    let mut keys = Vec::new();
++    for (key, data) in host {
++        fonts.font_data.insert(key.clone(), Arc::new(data.clone()));
++        keys.push(key.clone());
++    }
++    for list in fonts.families.values_mut() {
++        for key in &keys {
++            if !list.contains(key) {
++                list.push(key.clone());
++            }
++        }
++    }
++    for family in [FontFamily::Proportional, FontFamily::Monospace] {
++        if let Some(chain) = fonts.families.get_mut(&family) {
++            for key in keys.iter().rev() {
++                chain.retain(|item| item != key);
++                chain.insert(0, key.clone());
++            }
++        }
++    }
++}
++
+ /// The installed CJK interface font for a Chinese (`hans`) or other interface, chosen once:
+ /// `None` when the embedded faces already cover the interface text
+ /// ([`cjk_font_text`](crate::i18n::Lang::cjk_font_text)). The font is picked for the catalogs'

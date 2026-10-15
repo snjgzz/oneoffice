@@ -1,0 +1,566 @@
+diff --git a/crates/ui-egui/src/backstage.rs b/crates/ui-egui/src/backstage.rs
+index 922baab..17649eb 100644
+--- a/crates/ui-egui/src/backstage.rs
++++ b/crates/ui-egui/src/backstage.rs
+@@ -156,7 +156,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
+     let mut out = Outcome::default();
+     let (nav_bg, nav_text, nav_sel) =
+         if t.dark { (t.accent_soft, t.text, Color32::from_white_alpha(30)) } else { (t.accent, Color32::WHITE, Color32::from_black_alpha(46)) };
+-    egui::Panel::left("backstage_nav")
++    egui::Panel::left(app.scope("backstage_nav"))
+         .exact_size(NAV_W)
+         .resizable(false)
+         .frame(egui::Frame::NONE.fill(nav_bg).inner_margin(egui::Margin { left: 0, right: 0, top: 10, bottom: 10 }))
+diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
+index fb899c7..a9ef4e5 100644
+--- a/crates/ui-egui/src/dialogs.rs
++++ b/crates/ui-egui/src/dialogs.rs
+@@ -1036,7 +1036,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
+         _ => 380.0,
+     };
+     let window = egui::Window::new(app.ui.language.tr(&d.title))
+-        .id(egui::Id::new("dialog").with(&d.name))
++        .id(app.scope("dialog").with(&d.name))
+         .collapsible(false)
+         .resizable(false)
+         .default_width(width)
+diff --git a/crates/ui-egui/src/formula_bar.rs b/crates/ui-egui/src/formula_bar.rs
+index 7f1ad87..c6a3ba3 100644
+--- a/crates/ui-egui/src/formula_bar.rs
++++ b/crates/ui-egui/src/formula_bar.rs
+@@ -12,7 +12,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
+     let t = Tokens::get(ui.ctx());
+     let expanded = app.ui.formula_bar_expanded;
+     let h = if expanded { 72.0 } else { 30.0 };
+-    egui::Panel::top("formula_bar")
++    egui::Panel::top(app.scope("formula_bar"))
+         .exact_size(h)
+         .frame(egui::Frame::NONE.fill(t.window).inner_margin(egui::Margin { left: 8, right: 8, top: 3, bottom: 3 }))
+         .show(ui, |ui| {
+@@ -38,7 +38,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
+                 ui.painter().rect_filled(field, 4.0, t.input_bg);
+                 ui.painter().rect_stroke(field, 4.0, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
+                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(field.shrink2(vec2(6.0, 3.0))));
+-                let id = egui::Id::new("gridcraft.formula_bar");
++                let id = app.scope("gridcraft.formula_bar");
+                 let editing_here = app.editor.as_ref().is_some_and(|e| e.from_formula_bar);
+                 if app.editor.is_some() {
+                     editor_widget(app, &mut child, id, theme::ui_font(13.0), expanded, field.width() - 12.0);
+@@ -96,7 +96,7 @@ fn active_input(app: &SheetApp) -> String {
+ }
+ 
+ fn name_box(app: &mut SheetApp, ui: &mut egui::Ui, t: &Tokens) {
+-    let id = egui::Id::new("gridcraft.name_box");
++    let id = app.scope("gridcraft.name_box");
+     let shown = app.name_box_text();
+     let mut text = app.name_box.clone().unwrap_or(shown.clone());
+     let rect = Rect::from_min_size(ui.cursor().min, vec2(118.0, 24.0));
+@@ -157,7 +157,7 @@ fn name_box(app: &mut SheetApp, ui: &mut egui::Ui, t: &Tokens) {
+ /// The text editor used in the cell and in the formula bar (they share `app.editor`).
+ pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font: FontId, multiline: bool, width: f32) {
+     let Some(mut ed) = app.editor.take() else { return };
+-    let mine = ed.from_formula_bar == (id == egui::Id::new("gridcraft.formula_bar"));
++    let mine = ed.from_formula_bar == (id == app.scope("gridcraft.formula_bar"));
+     // Keys the editor handles itself (before the TextEdit sees them), only where it has focus.
+     let focused = ui.ctx().memory(|m| m.focused());
+     let has_focus = focused == Some(id) || (mine && (ed.request_focus || focused.is_none()));
+@@ -259,7 +259,7 @@ pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font:
+     // The text widget.
+     let refs = formula_refs(&ed.text);
+     let text_color = Tokens::get(ui.ctx()).text;
+-    let cell_text_color = if id == egui::Id::new("gridcraft.cell_editor") { Color32::BLACK } else { text_color };
++    let cell_text_color = if id == app.scope("gridcraft.cell_editor") { Color32::BLACK } else { text_color };
+     let font2 = font.clone();
+     let mut layouter = move |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
+         let s = buf.as_str();
+@@ -302,7 +302,7 @@ pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font:
+         output.state.store(ui.ctx(), id);
+     } else if resp.clicked() || resp.gained_focus() {
+         // Clicking into the other editor moves editing there.
+-        ed.from_formula_bar = id == egui::Id::new("gridcraft.formula_bar");
++        ed.from_formula_bar = id == app.scope("gridcraft.formula_bar");
+         ed.enter_mode = false;
+         app.session.mode = gridcraft_engine::Mode::Edit;
+     }
+diff --git a/crates/ui-egui/src/grid.rs b/crates/ui-egui/src/grid.rs
+index 97b787e..45172ed 100644
+--- a/crates/ui-egui/src/grid.rs
++++ b/crates/ui-egui/src/grid.rs
+@@ -2567,7 +2567,7 @@ fn select_ranges(app: &mut SheetApp, r: RangeRef, add: bool, active: CellRef) {
+ /// Grid keyboard handling when no text field has focus.
+ fn keyboard(app: &mut SheetApp, ctx: &egui::Context, resp: &egui::Response, geo: &Geo, sh: &Sheet) {
+     // Focus left on an editor that no longer exists goes back to the grid.
+-    let stale = [egui::Id::new("gridcraft.cell_editor"), egui::Id::new("gridcraft.formula_bar"), crate::text_box::editor_id()];
++    let stale = [app.scope("gridcraft.cell_editor"), app.scope("gridcraft.formula_bar"), crate::text_box::editor_id(app)];
+     let editing = app.editor.is_some() || app.text_box_editor.is_some();
+     if !editing && ctx.memory(|m| m.focused()).is_some_and(|f| stale.contains(&f)) {
+         resp.request_focus();
+@@ -2721,7 +2721,7 @@ fn in_cell_editor(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, sh: &Sheet,
+     let painter = ui.painter().with_clip_rect(clip);
+     painter.rect_filled(erect, 0.0, fill);
+     painter.rect_stroke(erect.expand(1.0), 0.0, Stroke::new(2.0, Tokens::get(ui.ctx()).sel_border), StrokeKind::Middle);
+-    let id = egui::Id::new("gridcraft.cell_editor");
++    let id = app.scope("gridcraft.cell_editor");
+     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(erect.shrink2(vec2(2.0, 1.0))));
+     child.set_clip_rect(clip);
+     crate::formula_bar::editor_widget(app, &mut child, id, font, false, erect.width() - 4.0);
+@@ -2766,10 +2766,10 @@ fn filter_menu(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
+     }
+     let wb = app.session.active().map(|d| d.wb.clone()).unwrap_or(wb);
+     let values = gridcraft_engine::cmd::data::filter_values(&wb, si, col);
+-    let key = egui::Id::new(("filter_sel", col));
+-    let search_key = egui::Id::new(("filter_search", col));
++    let key = app.scope("filter_sel").with(col);
++    let search_key = app.scope("filter_search").with(col);
+     let mut close = false;
+-    let area = egui::Area::new(egui::Id::new("filter_menu")).fixed_pos(at + vec2(-180.0, 10.0)).order(egui::Order::Foreground);
++    let area = egui::Area::new(app.scope("filter_menu")).fixed_pos(at + vec2(-180.0, 10.0)).order(egui::Order::Foreground);
+     let response = area.show(ui.ctx(), |ui| {
+         egui::Frame::popup(ui.style()).show(ui, |ui| {
+             ui.set_width(230.0);
+@@ -2844,7 +2844,7 @@ fn filter_menu(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
+ fn context_menu(app: &mut SheetApp, ui: &mut egui::Ui) {
+     let Some(at) = app.grid.context_menu else { return };
+     let mut close = false;
+-    let resp = egui::Area::new(egui::Id::new("cell_context")).fixed_pos(at).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
++    let resp = egui::Area::new(app.scope("cell_context")).fixed_pos(at).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
+         egui::Frame::popup(ui.style()).show(ui, |ui| {
+             ui.set_min_width(200.0);
+             let insert_copied = insert_copied_item(app);
+@@ -2991,7 +2991,7 @@ pub(crate) fn paint_overlays(
+     {
+         let r = geo.cell_rect(sh, sel.active);
+         let (at, pivot) = (geo.mirror_pos(pos2(r.left() + 8.0, r.bottom() + 6.0)), if geo.rtl { Align2::RIGHT_TOP } else { Align2::LEFT_TOP });
+-        egui::Area::new(egui::Id::new("dv_input")).fixed_pos(at).pivot(pivot).order(egui::Order::Tooltip).interactable(false).show(ui.ctx(), |ui| {
++        egui::Area::new(app.scope("dv_input")).fixed_pos(at).pivot(pivot).order(egui::Order::Tooltip).interactable(false).show(ui.ctx(), |ui| {
+             egui::Frame::popup(ui.style()).fill(Color32::from_rgb(0xFF, 0xFF, 0xE1)).show(ui, |ui| {
+                 ui.set_max_width(220.0);
+                 if !dv.input_title.is_empty() {
+@@ -3016,7 +3016,7 @@ pub(crate) fn paint_overlays(
+         let at = pos2(r.right() + 10.0, r.top());
+         p.line_segment([r.right_top(), at + vec2(0.0, 6.0)], Stroke::new(1.0, Color32::from_gray(90)));
+         let (at, pivot) = (geo.mirror_pos(at), if geo.rtl { Align2::RIGHT_TOP } else { Align2::LEFT_TOP });
+-        egui::Area::new(egui::Id::new(("note", c.row, c.col))).fixed_pos(at).pivot(pivot).order(egui::Order::Tooltip).interactable(false).show(
++        egui::Area::new(app.scope("note").with((c.row, c.col))).fixed_pos(at).pivot(pivot).order(egui::Order::Tooltip).interactable(false).show(
+             ui.ctx(),
+             |ui| {
+                 egui::Frame::popup(ui.style()).fill(if cm.threaded { Color32::WHITE } else { Color32::from_rgb(0xFF, 0xFF, 0xE1) }).show(ui, |ui| {
+@@ -3036,7 +3036,7 @@ pub(crate) fn paint_overlays(
+         && app.editor.is_none()
+     {
+         let tip = h.tooltip.clone().unwrap_or_else(|| format!("{}\nClick once to follow. Click and hold to select this cell.", h.target));
+-        egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), egui::Id::new("link_tip"), egui::PopupAnchor::Pointer).show(|ui| {
++        egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), app.scope("link_tip"), egui::PopupAnchor::Pointer).show(|ui| {
+             ui.label(tip);
+         });
+     }
+@@ -3083,7 +3083,7 @@ fn list_picker(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
+     let r = geo.cell_rect(sh, c);
+     let (at, pivot) = (geo.mirror_pos(r.left_bottom()), if geo.rtl { Align2::RIGHT_TOP } else { Align2::LEFT_TOP });
+     let mut close = false;
+-    let response = egui::Area::new(egui::Id::new("dv_list")).fixed_pos(at).pivot(pivot).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
++    let response = egui::Area::new(app.scope("dv_list")).fixed_pos(at).pivot(pivot).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
+         egui::Frame::popup(ui.style()).inner_margin(2.0).show(ui, |ui| {
+             ui.set_min_width(r.width().max(100.0));
+             egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+@@ -3104,7 +3104,7 @@ fn list_picker(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
+ fn header_menu(app: &mut SheetApp, ui: &mut egui::Ui, was_open: bool) {
+     let Some((at, rows)) = app.grid.header_menu else { return };
+     let mut close = false;
+-    let response = egui::Area::new(egui::Id::new("header_menu")).fixed_pos(at).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
++    let response = egui::Area::new(app.scope("header_menu")).fixed_pos(at).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
+         egui::Frame::popup(ui.style()).show(ui, |ui| {
+             ui.set_min_width(190.0);
+             let insert_copied = insert_copied_item(app);
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index f96cdac..cb3d862 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -263,6 +263,15 @@ pub struct SheetApp {
+     /// holding other text. Once the cut has been pasted, Paste leaves this text alone.
+     cut_text: Option<String>,
+     pub started: f64,
++    /// Host embed id. `Some` paints into a parent region: the window title bar, viewport title
++    /// and theme/zoom takeover stay with the host, and persistent widget ids are salted with it
++    /// so two embedded workbooks do not share egui memory.
++    pub embed_salt: Option<u64>,
++    /// A document was open in this embedded app. Closing the last one asks the host to drop the
++    /// tab instead of creating a blank workbook.
++    embed_had_doc: bool,
++    /// File › Close finished while embedded. The host reads this and closes its tab.
++    pub embed_closed: bool,
+ }
+ 
+ impl SheetApp {
+@@ -306,9 +315,41 @@ impl SheetApp {
+             clipboard_text_at_copy: None,
+             cut_text: None,
+             started: now_ms(),
++            embed_salt: None,
++            embed_had_doc: false,
++            embed_closed: false,
+         }
+     }
+ 
++    /// Persistent widget id. Unsalted when this app owns the window; salted per host tab when embedded.
++    pub fn scope(&self, key: &str) -> egui::Id {
++        match self.embed_salt {
++            Some(salt) => egui::Id::new(("gridcraft-embed", salt, key)),
++            None => egui::Id::new(key),
++        }
++    }
++
++    /// Put this app's named font families back after another tab called `set_fonts`.
++    /// The host calls this after `logic` on the frame the tab becomes visible.
++    /// `ui` skips until the next pass, which is when egui applies the new definitions.
++    pub fn prepare_embed_fonts(&mut self, ctx: &egui::Context) {
++        if self.embed_salt.is_none() {
++            return;
++        }
++        if self.fonts_bound.is_empty() {
++            ctx.set_fonts(theme::font_definitions_for_language(self.ui.language));
++        } else {
++            ctx.set_fonts(theme::font_definitions_with(
++                self.ui.language,
++                &self.fonts_bound,
++            ));
++        }
++        self.fonts_ready = false;
++        self.fonts_set = true;
++        self.fonts_rebind = false;
++        ctx.request_repaint();
++    }
++
+     /// One-time context setup: start cataloging the machine's fonts, then install the fonts and
+     /// visuals. Workbook-specific fonts are bound later, once the scan is done (see [`logic`]).
+     ///
+@@ -1002,7 +1043,12 @@ impl SheetApp {
+             if self.fonts_set {
+                 self.fonts_ready = true;
+             } else {
+-                SheetApp::setup_context_for_language(ctx, self.ui.dark, self.ui.language);
++                if self.embed_salt.is_some() {
++                    // Fonts only. The host owns visuals, zoom and the window theme.
++                    ctx.set_fonts(theme::font_definitions_for_language(self.ui.language));
++                } else {
++                    SheetApp::setup_context_for_language(ctx, self.ui.dark, self.ui.language);
++                }
+                 self.fonts_set = true;
+                 // The rebuilt set has no workbook fonts yet: bind them again once it is active.
+                 self.fonts_bound.clear();
+@@ -1029,32 +1075,34 @@ impl SheetApp {
+                 }
+             }
+         }
+-        if let Some(answer) = self.desktop_theme.take_change() {
+-            self.desktop_dark = Some(answer);
+-        }
+-        let preference = match (
+-            self.ui.system_theme,
+-            ctx.system_theme().or_else(|| self.desktop_dark.map(|d| if d { egui::Theme::Dark } else { egui::Theme::Light })),
+-        ) {
+-            (true, Some(egui::Theme::Dark)) => egui::ThemePreference::Dark,
+-            (true, Some(egui::Theme::Light)) => egui::ThemePreference::Light,
+-            _ => self.ui.theme_preference(),
+-        };
+-        if ctx.options(|o| o.theme_preference) != preference {
+-            ctx.set_theme(preference);
+-            ctx.request_repaint();
++        if self.embed_salt.is_none() {
++            if let Some(answer) = self.desktop_theme.take_change() {
++                self.desktop_dark = Some(answer);
++            }
++            let preference = match (
++                self.ui.system_theme,
++                ctx.system_theme().or_else(|| self.desktop_dark.map(|d| if d { egui::Theme::Dark } else { egui::Theme::Light })),
++            ) {
++                (true, Some(egui::Theme::Dark)) => egui::ThemePreference::Dark,
++                (true, Some(egui::Theme::Light)) => egui::ThemePreference::Light,
++                _ => self.ui.theme_preference(),
++            };
++            if ctx.options(|o| o.theme_preference) != preference {
++                ctx.set_theme(preference);
++                ctx.request_repaint();
++            }
++            // Interface size: the preference owns the zoom factor, so egui's own Ctrl/Cmd +/-/0 zoom
++            // keys stay off (they would also swallow GridCraft's shortcuts).
++            if ctx.options(|o| o.zoom_with_keyboard) {
++                ctx.options_mut(|o| o.zoom_with_keyboard = false);
++            }
++            let zoom = self.ui.zoom_factor();
++            if (ctx.zoom_factor() - zoom).abs() > 0.001 {
++                ctx.set_zoom_factor(zoom);
++                ctx.request_repaint();
++            }
+         }
+         self.effective_dark = ctx.theme() == egui::Theme::Dark;
+-        // Interface size: the preference owns the zoom factor, so egui's own Ctrl/Cmd +/-/0 zoom
+-        // keys stay off (they would also swallow GridCraft's shortcuts).
+-        if ctx.options(|o| o.zoom_with_keyboard) {
+-            ctx.options_mut(|o| o.zoom_with_keyboard = false);
+-        }
+-        let zoom = self.ui.zoom_factor();
+-        if (ctx.zoom_factor() - zoom).abs() > 0.001 {
+-            ctx.set_zoom_factor(zoom);
+-            ctx.request_repaint();
+-        }
+         control::poll(self, ctx);
+         // Files read asynchronously (web file picker, dropped files).
+         let arrived: Vec<(String, Vec<u8>)> = self
+@@ -1079,7 +1127,14 @@ impl SheetApp {
+             }
+             self.after_engine();
+         }
+-        if self.session.active().is_none() {
++        if self.session.active().is_some() {
++            self.embed_had_doc = true;
++        } else if self.embed_salt.is_some() {
++            // The host owns the tab. A blank workbook here is what made File › Close look empty.
++            if self.embed_had_doc {
++                self.embed_closed = true;
++            }
++        } else {
+             self.session.new_workbook();
+         }
+     }
+@@ -1106,7 +1161,9 @@ impl SheetApp {
+         if self.backstage.is_none() {
+             self.ribbon_keys(&ctx);
+         }
+-        ribbon::title_bar(self, ui);
++        if self.embed_salt.is_none() {
++            ribbon::title_bar(self, ui);
++        }
+         if self.backstage.is_some() {
+             // File tab: the Backstage view replaces everything below the title bar.
+             backstage::show(self, ui);
+@@ -1156,8 +1213,10 @@ impl SheetApp {
+             self.store_view_state();
+             let _ = self.session.run("file.save", json!({}));
+         }
+-        // Window title.
+-        if let Some(d) = self.session.active() {
++        // Window title stays with the host when this app is embedded.
++        if self.embed_salt.is_none()
++            && let Some(d) = self.session.active()
++        {
+             let title = format!("{}{}", d.display_title(), if d.is_dirty() { " — Edited" } else { "" });
+             if self.grid.last_title.as_deref() != Some(title.as_str()) {
+                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+diff --git a/crates/ui-egui/src/panes.rs b/crates/ui-egui/src/panes.rs
+index aaa9bec..fc14198 100644
+--- a/crates/ui-egui/src/panes.rs
++++ b/crates/ui-egui/src/panes.rs
+@@ -19,7 +19,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
+     let t = Tokens::get(ui.ctx());
+     // Capped at half the window so a pane can never cover the sheet, whatever its content asks for.
+     let max = (ui.available_width() / 2.0).max(300.0);
+-    let panel = egui::Panel::right("task_pane").default_size(300.0).max_size(max).resizable(true);
++    let panel = egui::Panel::right(app.scope("task_pane")).default_size(300.0).max_size(max).resizable(true);
+     panel.frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(10)).show(ui, |ui| {
+         ui.horizontal(|ui| {
+             let title = match pane.as_str() {
+diff --git a/crates/ui-egui/src/pivot_pane.rs b/crates/ui-egui/src/pivot_pane.rs
+index 55917ef..4fb4e48 100644
+--- a/crates/ui-egui/src/pivot_pane.rs
++++ b/crates/ui-egui/src/pivot_pane.rs
+@@ -25,7 +25,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
+         Ok(v) => v,
+         Err(_) => return,
+     };
+-    egui::Panel::right("pivot_pane").default_size(280.0).resizable(true).frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(10)).show(ui, |ui| {
++    egui::Panel::right(app.scope("pivot_pane")).default_size(280.0).resizable(true).frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(10)).show(ui, |ui| {
+         ui.label(egui::RichText::new(lang.tr("PivotTable Fields")).font(theme::ui_bold(15.0)));
+         ui.label(egui::RichText::new(lang.tr("Choose fields to add to report:")).small().color(t.text_dim));
+         ui.add_space(4.0);
+diff --git a/crates/ui-egui/src/ribbon.rs b/crates/ui-egui/src/ribbon.rs
+index 9c6d89e..5545af4 100644
+--- a/crates/ui-egui/src/ribbon.rs
++++ b/crates/ui-egui/src/ribbon.rs
+@@ -38,7 +38,7 @@ const _: () = assert!(TITLE_CONTROL_H < TITLE_BAR_H, "title-bar controls keep a
+ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
+     let t = Tokens::get(ui.ctx());
+     let ch = TITLE_CONTROL_H;
+-    egui::Panel::top("title_bar").exact_size(TITLE_BAR_H).frame(egui::Frame::NONE.fill(t.window)).show(ui, |ui| {
++    egui::Panel::top(app.scope("title_bar")).exact_size(TITLE_BAR_H).frame(egui::Frame::NONE.fill(t.window)).show(ui, |ui| {
+         let rect = ui.max_rect();
+         // Dragging the empty title area moves the window.
+         let bg = ui.interact(rect, ui.id().with("drag_title"), Sense::click_and_drag());
+@@ -166,7 +166,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
+     let t = Tokens::get(ui.ctx());
+     let collapsed = app.ui.ribbon_collapsed;
+     let h = if collapsed { 34.0 } else { 34.0 + 92.0 };
+-    egui::Panel::top("ribbon")
++    egui::Panel::top(app.scope("ribbon"))
+         .exact_size(h)
+         .frame(egui::Frame::NONE.fill(t.window).inner_margin(egui::Margin { left: 10, right: 10, top: 0, bottom: 6 }))
+         .show(ui, |ui| {
+diff --git a/crates/ui-egui/src/tabs.rs b/crates/ui-egui/src/tabs.rs
+index b77524b..cbbdc1b 100644
+--- a/crates/ui-egui/src/tabs.rs
++++ b/crates/ui-egui/src/tabs.rs
+@@ -37,7 +37,7 @@ fn activate_sheet(app: &mut SheetApp, i: usize) {
+ 
+ pub fn sheet_tabs(app: &mut SheetApp, ui: &mut Ui) {
+     let t = Tokens::get(ui.ctx());
+-    egui::Panel::bottom("sheet_tabs").exact_size(32.0).frame(egui::Frame::NONE.fill(t.tab_bar)).show(ui, |ui| {
++    egui::Panel::bottom(app.scope("sheet_tabs")).exact_size(32.0).frame(egui::Frame::NONE.fill(t.tab_bar)).show(ui, |ui| {
+         let rect = ui.max_rect();
+         ui.painter().line_segment([rect.left_top(), rect.right_top()], Stroke::new(1.0, t.ribbon_border));
+         ui.horizontal_centered(|ui| {
+@@ -226,7 +226,7 @@ pub fn sheet_tabs(app: &mut SheetApp, ui: &mut Ui) {
+ 
+ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
+     let t = Tokens::get(ui.ctx());
+-    egui::Panel::bottom("status_bar").exact_size(26.0).frame(egui::Frame::NONE.fill(t.status_bar).inner_margin(egui::Margin::symmetric(12, 0))).show(
++    egui::Panel::bottom(app.scope("status_bar")).exact_size(26.0).frame(egui::Frame::NONE.fill(t.status_bar).inner_margin(egui::Margin::symmetric(12, 0))).show(
+         ui,
+         |ui| {
+             ui.horizontal_centered(|ui| {
+diff --git a/crates/ui-egui/src/text_box.rs b/crates/ui-egui/src/text_box.rs
+index a0b30c0..fc9840d 100644
+--- a/crates/ui-egui/src/text_box.rs
++++ b/crates/ui-egui/src/text_box.rs
+@@ -17,8 +17,8 @@ pub struct EditState {
+     rect: Option<Rect>,
+ }
+ 
+-pub(crate) fn editor_id() -> egui::Id {
+-    egui::Id::new("gridcraft.text_box_editor")
++pub(crate) fn editor_id(app: &SheetApp) -> egui::Id {
++    app.scope("gridcraft.text_box_editor")
+ }
+ 
+ impl SheetApp {
+@@ -94,13 +94,13 @@ pub(crate) fn before_ui(app: &mut SheetApp, ctx: &egui::Context) {
+     let Some(ed) = &app.text_box_editor else { return };
+     if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+         app.cancel_text_box_edit();
+-        ctx.memory_mut(|m| m.surrender_focus(editor_id()));
++        ctx.memory_mut(|m| m.surrender_focus(editor_id(app)));
+         return;
+     }
+     let outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| ed.rect.is_none_or(|r| !r.contains(p))));
+     if outside {
+         match app.commit_text_box_edit() {
+-            Ok(()) => ctx.memory_mut(|m| m.surrender_focus(editor_id())),
++            Ok(()) => ctx.memory_mut(|m| m.surrender_focus(editor_id(app))),
+             Err(e) => app.message = Some(("Text Box".into(), crate::clean_error(&e))),
+         }
+     }
+@@ -139,7 +139,7 @@ pub(crate) fn show(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, sh: &gridcr
+         return;
+     }
+     ed.rect = Some(rect);
+-    let id = editor_id();
++    let id = editor_id(app);
+     if ed.request_focus {
+         // A new editing session must not reuse the previous box's caret/undo history.
+         egui::text_edit::TextEditState::default().store(ui.ctx(), id);
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index 485b9a2..207c25f 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -5,7 +5,7 @@
+ //! best available match for the workbook font (Calibri/Carlito/Aptos/Arial…) with egui's built-in
+ //! fonts as the last resort.
+ 
+-use std::sync::Arc;
++use std::sync::{Arc, OnceLock};
+ 
+ use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId, Stroke, Visuals};
+ 
+@@ -382,6 +382,30 @@ pub fn font_definitions_for_language(language: crate::i18n::Language) -> FontDef
+     font_definitions_with(language, &[])
+ }
+ 
++/// Extra faces a host app injects (OneOffice's bundled CJK font). The first call wins.
++/// Empty unless [`set_host_fallback_fonts`] ran, so GridCraft's own tests stay stable.
++static HOST_FONTS: OnceLock<Vec<(String, FontData)>> = OnceLock::new();
++
++/// Registers faces merged into every GridCraft font chain. Call once, before the first frame
++/// that builds fonts. Each face is also placed first in the proportional and monospace families,
++/// which is what a host shell uses for its own chrome.
++pub fn set_host_fallback_fonts(fonts: Vec<(String, FontData)>) {
++    let _ = HOST_FONTS.set(fonts);
++}
++
++fn host_font_keys(fonts: &mut FontDefinitions) -> Vec<String> {
++    let Some(host) = HOST_FONTS.get() else { return Vec::new() };
++    let mut keys = Vec::new();
++    for (key, data) in host {
++        if !font_parses(&data.font, data.index) {
++            continue;
++        }
++        fonts.font_data.insert(key.clone(), Arc::new(data.clone()));
++        keys.push(key.clone());
++    }
++    keys
++}
++
+ /// [`font_definitions_for_language`] that also binds the workbook fonts in `used` that are
+ /// installed, so cells set in them render with them; the rest fall back to the roles. The bound
+ /// families are recorded in [`crate::fonts`] so [`cell_family`] only names a family egui has.
+@@ -392,7 +416,8 @@ pub fn font_definitions_with(language: crate::i18n::Language, used: &[String]) -
+     let mut bound: Vec<String> = Vec::new();
+     // The non-Latin fallback faces have to sit at the end of each chain: a Latin font owns Latin,
+     // and epaint picks the first face that has the glyph, so they only catch their own scripts.
+-    let fallback = load_fallback(&mut fonts, HanOrder::of(language));
++    let mut fallback = load_fallback(&mut fonts, HanOrder::of(language));
++    fallback.extend(host_font_keys(&mut fonts));
+     for role in [UI, UI_BOLD, CELL, CELL_BOLD, CELL_ITALIC, CELL_BOLD_ITALIC, SERIF, MONO] {
+         let paths = candidates(role);
+         let refs: Vec<(&str, u32)> = paths.iter().map(|(p, i)| (p.as_str(), *i)).collect();
+@@ -434,6 +459,21 @@ pub fn font_definitions_with(language: crate::i18n::Language, used: &[String]) -
+     if let Some(ui) = fonts.families.get(&FontFamily::Name(UI.into())).cloned() {
+         fonts.families.insert(FontFamily::Proportional, ui);
+     }
++    // Host faces lead the families a shell paints with. Role chains keep them at the end, so a
++    // Latin cell font still wins and the host face only fills glyphs that font lacks.
++    if let Some(host) = HOST_FONTS.get() {
++        for family in [FontFamily::Proportional, FontFamily::Monospace] {
++            if let Some(chain) = fonts.families.get_mut(&family) {
++                for (key, _) in host.iter().rev() {
++                    if !fonts.font_data.contains_key(key) {
++                        continue;
++                    }
++                    chain.retain(|item| item != key);
++                    chain.insert(0, key.clone());
++                }
++            }
++        }
++    }
+     drop_unparseable_fonts(&mut fonts);
+     // Only families egui still has data for count as bound (a dropped face can empty a chain).
+     bound.retain(|f| fonts.families.get(&FontFamily::Name(f.as_str().into())).is_some_and(|c| !c.is_empty()));
+diff --git a/crates/ui-egui/src/widgets.rs b/crates/ui-egui/src/widgets.rs
+index e24105b..4929af5 100644
+--- a/crates/ui-egui/src/widgets.rs
++++ b/crates/ui-egui/src/widgets.rs
+@@ -273,7 +273,7 @@ pub fn color_palette(ui: &mut Ui, theme_colors: &[u32; 12], none_label: &str) ->
+ pub fn message_box(app: &mut SheetApp, ctx: &egui::Context) {
+     let Some((title, msg)) = app.message.clone() else { return };
+     let mut close = false;
+-    egui::Modal::new(egui::Id::new("message_box")).show(ctx, |ui| {
++    egui::Modal::new(app.scope("message_box")).show(ctx, |ui| {
+         ui.set_width(380.0);
+         ui.horizontal(|ui| {
+             let (r, _) = ui.allocate_exact_size(vec2(36.0, 36.0), Sense::hover());
+@@ -303,7 +303,7 @@ pub fn toast(app: &mut SheetApp, ctx: &egui::Context) {
+         return;
+     }
+     let Some(rect) = app.grid.rect else { return };
+-    egui::Area::new(egui::Id::new("toast")).fixed_pos(pos2(rect.center().x - 160.0, rect.bottom() - 48.0)).order(egui::Order::Tooltip).show(
++    egui::Area::new(app.scope("toast")).fixed_pos(pos2(rect.center().x - 160.0, rect.bottom() - 48.0)).order(egui::Order::Tooltip).show(
+         ctx,
+         |ui| {
+             egui::Frame::popup(ui.style()).show(ui, |ui| {
+@@ -326,7 +326,7 @@ pub fn notice_bar(app: &mut SheetApp, ui: &mut Ui) {
+     };
+     let mut dismiss = false;
+     let mut action: Option<(String, String)> = None;
+-    egui::Panel::top("notice_bar").frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(12, 0))).show(ui, |ui| {
++    egui::Panel::top(app.scope("notice_bar")).frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(12, 0))).show(ui, |ui| {
+         // Bottom border as a 1px strip spanning the bar.
+         let bar = ui.max_rect();
+         ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, border), StrokeKind::Inside);

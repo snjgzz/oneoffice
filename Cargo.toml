@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/shell"]
 # gridcraft is its own workspace. Excluding it lets its crates keep `.workspace = true`
 # against vendor/gridcraft/Cargo.toml instead of this file.
-exclude = ["vendor/gridcraft"]
+exclude = ["vendor/gridcraft", "vendor/wordcraft", "vendor/deckcraft"]
 
 [workspace.package]
 version = "0.1.0"
@@ -19,3 +19,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rfd = "0.15"
+
+# deckcraft's craft-pdf refuses an unpatched krilla (it checks `CRAFT_UNWIND_POISONING`).
+# The same `[patch.crates-io]` in vendor/deckcraft/Cargo.toml applies only when that
+# repo is the workspace root, so OneOffice repeats it here. WordCraft's PDF export
+# then uses this fork as well; the fork adds a `KrillaError::Poisoned` variant and
+# keeps the 0.8.2 API WordCraft calls.
+[patch.crates-io]
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "c3487320b2d1de657b860b3c8abb44e1f2b32bd8", version = "=0.8.2" }

@@ -23,10 +23,6 @@ pub const NAV_TEXT: Color32 = Color32::from_rgb(0x3A, 0x3F, 0x47);
 pub const HEADER_BG: Color32 = Color32::from_rgb(0xFA, 0xFB, 0xFC);
 pub const ROW_LINE: Color32 = Color32::from_rgb(0xF0, 0xF1, 0xF3);
 pub const HOVER: Color32 = Color32::from_rgb(0xF4, 0xF6, 0xF9);
-pub const CANVAS: Color32 = Color32::from_rgb(0xE9, 0xEB, 0xEE);
-pub const CALLOUT_BG: Color32 = Color32::from_rgb(0xFF, 0xF4, 0xE5);
-pub const CALLOUT_FG: Color32 = Color32::from_rgb(0xB3, 0x5C, 0x00);
-pub const CALLOUT_LINE: Color32 = Color32::from_rgb(0xF0, 0xA0, 0x4B);
 pub const WHITE: Color32 = Color32::WHITE;
 
 pub const TRAFFIC_GUTTER: f32 = 78.0;

@@ -7,7 +7,7 @@ use gridcraft_engine::Session;
 use gridcraft_ui_egui::{Services, SheetApp};
 use serde_json::json;
 
-use crate::editor::DocumentEditor;
+use crate::editor::{DocumentEditor, HostEvent};
 use crate::kind::DocKind;
 use crate::theme;
 
@@ -16,22 +16,24 @@ const SHEET_EXTENSIONS: &[&str] = &["xlsx", "xlsm", "xls", "xlsb", "ods"];
 pub(crate) struct SheetEditor {
     app: SheetApp,
     title: String,
+    salt: u64,
+    host: Arc<Mutex<Vec<HostEvent>>>,
 }
 
 impl SheetEditor {
-    pub(crate) fn blank(salt: u64, title: String, opens: Arc<Mutex<Vec<PathBuf>>>) -> Self {
+    pub(crate) fn blank(salt: u64, title: String, host: Arc<Mutex<Vec<HostEvent>>>) -> Self {
         let mut session = Session::new();
         session.new_workbook();
         if let Some(doc) = session.active_mut() {
             doc.title.clone_from(&title);
         }
-        let mut editor = Self::from_session(salt, session, opens);
+        let mut editor = Self::from_session(salt, session, host);
         editor.title = title;
         editor
     }
 
-    pub(crate) fn open(salt: u64, path: &Path, opens: Arc<Mutex<Vec<PathBuf>>>) -> Self {
-        let mut editor = Self::from_session(salt, Session::new(), opens);
+    pub(crate) fn open(salt: u64, path: &Path, host: Arc<Mutex<Vec<HostEvent>>>) -> Self {
+        let mut editor = Self::from_session(salt, Session::new(), host);
         match path.to_str() {
             Some(path) => editor.app.open_path(path),
             None => {
@@ -43,8 +45,8 @@ impl SheetEditor {
         editor
     }
 
-    fn from_session(salt: u64, session: Session, opens: Arc<Mutex<Vec<PathBuf>>>) -> Self {
-        let mut app = SheetApp::new(session, services(opens));
+    fn from_session(salt: u64, session: Session, host: Arc<Mutex<Vec<HostEvent>>>) -> Self {
+        let mut app = SheetApp::new(session, services(Arc::clone(&host)));
         app.embed_salt = Some(salt);
         app.ui.language = gridcraft_ui_egui::i18n::Language::Zh;
         app.ui.system_theme = false;
@@ -52,6 +54,8 @@ impl SheetEditor {
         Self {
             app,
             title: "表格".into(),
+            salt,
+            host,
         }
     }
 
@@ -106,7 +110,17 @@ impl DocumentEditor for SheetEditor {
 
     fn logic(&mut self, ctx: &egui::Context) {
         self.app.logic(ctx);
+        if self.app.embed_closed {
+            self.host
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(HostEvent::Close(self.salt));
+        }
         self.refresh();
+    }
+
+    fn prepare_embed_fonts(&mut self, ctx: &egui::Context) {
+        self.app.prepare_embed_fonts(ctx);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {
@@ -123,8 +137,8 @@ pub(crate) fn register_cjk_font() {
     )]);
 }
 
-fn services(opens: Arc<Mutex<Vec<PathBuf>>>) -> Services {
-    let open_queue = opens;
+fn services(host: Arc<Mutex<Vec<HostEvent>>>) -> Services {
+    let open_queue = host;
     Services {
         pick_open: Some(Box::new(move || {
             let picked = rfd::FileDialog::new()
@@ -135,7 +149,7 @@ fn services(opens: Arc<Mutex<Vec<PathBuf>>>) -> Services {
                 open_queue
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(path);
+                    .push(HostEvent::Open(path));
             }
             // 返回 None，让壳另开一个标签，而不是塞进当前 session。
             None

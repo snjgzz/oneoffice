@@ -1,12 +1,12 @@
 # OneOffice
 
-OneOffice 是一个类似 WPS 的集成办公套件外壳：文字、表格、演示共用一个原生窗口。表格标签嵌的是 [gridcraft](https://github.com/storytold/gridcraft) 的 `SheetApp`（功能区、编辑栏、网格、公式）。文字和演示还是占位，后面接 [wordcraft](https://github.com/storytold/wordcraft) 和 [deckcraft](https://github.com/storytold/deckcraft)。
+OneOffice 是一个类似 WPS 的集成办公套件外壳：文字、表格、演示共用一个原生窗口。文字标签嵌 [wordcraft](https://github.com/storytold/wordcraft) 的 `WordApp`，表格标签嵌 [gridcraft](https://github.com/storytold/gridcraft) 的 `SheetApp`，演示标签嵌 [deckcraft](https://github.com/storytold/deckcraft) 的 `SlideApp`。各自保留功能区、画布和状态栏。
 
-界面是中文。侧栏只有「首页」和「最近」，「设置」钉在底部。最近文件记在本机配置目录的 `recent.json` 里，收通过打开动作进来的 `.docx` / `.xlsx` / `.xlsm` / `.xls` / `.xlsb` / `.ods` / `.pptx`。`.xls`、`.xlsb`、`.ods` 由 gridcraft 导入，保存时写成 `.xlsx`。
+界面是中文。侧栏只有「首页」和「最近」，「设置」钉在底部。最近文件记在本机配置目录的 `recent.json` 里，收通过打开动作进来的 `.doc` / `.docx` / `.xlsx` / `.xlsm` / `.xls` / `.xlsb` / `.ods` / `.pptx`。`.doc` 由 wordcraft 的 docbin 读取，保存写成 `.docx`。`.xls`、`.xlsb`、`.ods` 由 gridcraft 导入，保存时写成 `.xlsx`。
 
 ## English
 
-OneOffice is the shared native window for a WPS-style office suite. Spreadsheet tabs embed storytold/gridcraft (`SheetApp`): ribbon, formula bar, grid, and formulas. Word and presentation tabs are still placeholders for wordcraft (`WordApp`) and deckcraft (`SlideApp`). The UI is Chinese. Recent files are a local JSON list of documents opened from the native file dialog.
+OneOffice is the shared native window for a WPS-style office suite. Document tabs embed wordcraft (`WordApp`), spreadsheet tabs embed gridcraft (`SheetApp`), and presentation tabs embed deckcraft (`SlideApp`). The UI is Chinese. Recent files are a local JSON list of documents opened from the native file dialog.
 
 ## 在 Mac 上构建和运行
 
@@ -16,6 +16,8 @@ OneOffice is the shared native window for a WPS-style office suite. Spreadsheet 
 git clone --recurse-submodules https://github.com/snjgzz/oneoffice
 cd oneoffice
 tools/apply-gridcraft-patch.sh
+tools/apply-wordcraft-patch.sh
+tools/apply-deckcraft-patch.sh
 cargo run -p oneoffice
 ```
 
@@ -24,6 +26,8 @@ cargo run -p oneoffice
 ```sh
 git submodule update --init --recursive
 tools/apply-gridcraft-patch.sh
+tools/apply-wordcraft-patch.sh
+tools/apply-deckcraft-patch.sh
 ```
 
 打开已有文件：
@@ -32,7 +36,7 @@ tools/apply-gridcraft-patch.sh
 cargo run -p oneoffice -- ~/Documents/预算.xlsx
 ```
 
-扩展名是 docx、xlsx、xlsm、xls、xlsb、ods 或 pptx。文件会成为新标签，并写进最近列表。表格可以编辑、计算公式，用 Ctrl+S / ⌘S 或功能区「文件」保存。没有路径的新工作簿会弹出另存为。
+扩展名是 doc、docx、xlsx、xlsm、xls、xlsb、ods 或 pptx。文件会成为新标签，并写进最近列表。三种文档都可以编辑，用 Ctrl+S / ⌘S 或功能区「文件」保存。没有路径的新文档会弹出另存为。
 
 最近列表的位置：
 
@@ -68,19 +72,22 @@ cargo run -p oneoffice
 ```
 crates/shell          可执行文件 oneoffice，以及同名库
 vendor/gridcraft      storytold/gridcraft 子模块，固定提交
-patches/              嵌进壳所需的 gridcraft 补丁
+vendor/wordcraft      storytold/wordcraft 子模块，固定提交
+vendor/deckcraft      storytold/deckcraft 子模块，固定提交
+patches/              嵌进壳所需的补丁
 ```
 
-库导出 `DocKind`、`Tab` 和 `DocumentEditor`。`Tab::Sheet` 使用 `SheetEditor`，里面每个标签一份 `SheetApp`。文字和演示仍是 `PlaceholderEditor`。gridcraft 不加入本仓库的 workspace members，它自己的 `Cargo.toml` 继续解析 `.workspace = true`。
+库导出 `DocKind`、`Tab` 和 `DocumentEditor`。每种标签一份自己的 `Session` 和应用。三个上游仓库都不加入本仓库的 workspace members，它们自己的 `Cargo.toml` 继续解析 `.workspace = true`。
 
-嵌入补丁让 `SheetApp` 在 `embed_salt` 有值时去掉自己的标题栏、窗口标题和主题/缩放接管，并把面板和编辑器的 egui id 按标签隔开。补丁内容和更新方法在 `patches/README.md`。
+根 `Cargo.toml` 把 `krilla` 钉到 craft-libs `c3487320`（和 deckcraft 自己的 `[patch.crates-io]` 同一提交）。`craft-pdf` 需要这个补丁过的 `krilla`；被排除的子模块工作区里的 `[patch]` 不会作用到 OneOffice。wordcraft 的 PDF 导出因此也走这份 fork。
+
+嵌入补丁让应用在 `embed_salt` 有值时去掉自己的标题栏、窗口标题和主题/缩放接管。壳再用标签 id 隔开面板。补丁内容和更新方法在 `patches/README.md`。
 
 ## 路线图
 
 1. 主窗口壳。
-2. gridcraft 嵌进表格标签（当前）：打开、编辑、公式、保存、多个表格标签。
-3. 用同样的方式嵌 wordcraft（`WordApp`）和 deckcraft（`SlideApp`）。
-4. 关闭未保存的文字/演示标签时的确认（表格已经有）。
+2. gridcraft、wordcraft、deckcraft 嵌进各自的标签：打开、编辑、保存，多种标签可以同时开着。
+3. 演示里的音视频解码器目前整包编进二进制。如果体积成为问题，再把 codec 做成可选 feature。
 
 ## 许可证
 
@@ -92,6 +99,6 @@ patches/              嵌进壳所需的 gridcraft 补丁
 
 OneOffice 不隶属于 WPS、Microsoft 或 storytold。
 
-gridcraft 以子模块形式放在 `vendor/gridcraft`，版权和 MIT OR Apache-2.0 许可证保留在它自己的仓库里。`NOTICE` 写了项目名、仓库地址、固定的提交和许可证。不使用 GridCraft / ArtCraft 的商标做背书。wordcraft 和 deckcraft 接进来时同样处理。
+gridcraft、wordcraft、deckcraft 以子模块形式放在 `vendor/`，版权和 MIT OR Apache-2.0 许可证保留在它们自己的仓库里。`NOTICE` 写了项目名、仓库地址、固定的提交和许可证。不使用它们或 ArtCraft 的商标做背书。
 
 Noto Sans SC 只作为界面字体打包，按 OFL 随附许可证；不把保留名 Source 用在衍生字体上。

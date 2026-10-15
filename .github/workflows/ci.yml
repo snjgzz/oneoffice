@@ -20,8 +20,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Apply gridcraft embed patch
-        run: tools/apply-gridcraft-patch.sh
+      - name: Apply embed patches
+        run: |
+          tools/apply-gridcraft-patch.sh
+          tools/apply-wordcraft-patch.sh
+          tools/apply-deckcraft-patch.sh
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt

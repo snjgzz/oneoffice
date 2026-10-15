@@ -16,7 +16,7 @@ impl DocKind {
     pub fn from_path(path: &std::path::Path) -> Option<Self> {
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
         match ext.as_str() {
-            "docx" => Some(Self::Word),
+            "doc" | "docx" => Some(Self::Word),
             "xlsx" | "xlsm" | "xls" | "xlsb" | "ods" => Some(Self::Sheet),
             "pptx" => Some(Self::Deck),
             _ => None,

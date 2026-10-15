@@ -1,3 +1,9 @@
 [submodule "vendor/gridcraft"]
 	path = vendor/gridcraft
 	url = https://github.com/storytold/gridcraft.git
+[submodule "vendor/wordcraft"]
+	path = vendor/wordcraft
+	url = https://github.com/storytold/wordcraft.git
+[submodule "vendor/deckcraft"]
+	path = vendor/deckcraft
+	url = https://github.com/storytold/deckcraft.git

@@ -1,14 +1,19 @@
-//! 标签，以及以后嵌入 wordcraft / gridcraft / deckcraft 的接口。
+//! 标签，以及嵌入 wordcraft / gridcraft / deckcraft 的接口。
 //!
 //! 三个上游应用都在 `crates/ui-egui` 里提供 eframe 应用结构体，构造函数是
 //! `WordApp::new(session, services)`、`SheetApp::new(session, services)`、
 //! `SlideApp::new(session, services)`，并且都有 `fn ui(&mut self, ui: &mut egui::Ui)`。
 //! gridcraft 的类型名是 `SheetApp`（设计稿里写的 GridApp 是同一层）。
 //!
-//! gridcraft 的 `SheetApp` 已经能画进壳给的区域。wordcraft / deckcraft 仍是占位。
-//! 编辑器只在界面线程上用，不要求 `Send`：`SheetApp` 的文件对话框回调不是 `Send`。
+//! 编辑器只在界面线程上用，不要求 `Send`：文件对话框回调不是 `Send`。
 
 use std::path::{Path, PathBuf};
+
+/// 嵌入应用请壳做的事：另开一个标签，或关掉当前标签。
+pub(crate) enum HostEvent {
+    Open(PathBuf),
+    Close(u64),
+}
 
 use crate::kind::DocKind;
 
@@ -23,12 +28,14 @@ pub trait DocumentEditor {
         true
     }
     fn logic(&mut self, _ctx: &egui::Context) {}
+    /// 切回这个标签时重新装上它的字体。三个应用共用一个 egui 字体表，后调用的 `set_fonts` 会清掉前一个的具名族（例如 deckcraft 的 `bold`）。
+    fn prepare_embed_fonts(&mut self, _ctx: &egui::Context) {}
     fn path(&self) -> Option<PathBuf> {
         None
     }
 }
 
-/// 一个文档标签。文字和演示仍是占位；表格是 gridcraft 的 `SheetApp`。
+/// 一个文档标签。文字、表格、演示各是一份上游应用。
 pub struct DocTab {
     id: u64,
     path: Option<PathBuf>,
@@ -140,6 +147,12 @@ impl Tab {
         }
     }
 
+    pub fn prepare_embed_fonts(&mut self, ctx: &egui::Context) {
+        if let Self::Word(doc) | Self::Sheet(doc) | Self::Deck(doc) = self {
+            doc.editor_mut().prepare_embed_fonts(ctx);
+        }
+    }
+
     pub fn editor_path(&self) -> Option<PathBuf> {
         match self {
             Self::Home => None,
@@ -155,7 +168,9 @@ impl Tab {
 
     pub fn editor_ui(&mut self, ui: &mut egui::Ui) {
         if let Self::Word(doc) | Self::Sheet(doc) | Self::Deck(doc) = self {
-            doc.editor_mut().ui(ui);
+            let id = doc.id();
+            // 面板和默认控件的 id 跟着标签走。对话框仍用各应用的 `scope`。
+            ui.push_id(("oneoffice-tab", id), |ui| doc.editor_mut().ui(ui));
         }
     }
 }

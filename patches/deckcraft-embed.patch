@@ -1,0 +1,217 @@
+diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
+index 576a229..cd1d105 100644
+--- a/crates/ui-egui/src/dialogs.rs
++++ b/crates/ui-egui/src/dialogs.rs
+@@ -80,7 +80,7 @@ pub fn show(app: &mut SlideApp, ctx: &egui::Context) {
+     let mut open = true;
+     let mut close = false;
+     let mut window = egui::Window::new(title(&d.id))
+-        .id(egui::Id::new(("dialog", d.id.clone())))
++        .id(app.scope(("dialog", d.id.clone())))
+         .collapsible(false)
+         .resizable(false)
+         .anchor(Align2::CENTER_CENTER, vec2(0.0, -40.0))
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index 8867407..289f548 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -513,6 +513,13 @@ pub struct SlideApp {
+     next_file_id: u64,
+     /// Picks and drops whose bytes have not arrived yet.
+     pending_files: Vec<PendingFile>,
++    /// Host embed id. `Some` paints into a parent region: the title bar, theme and zoom stay
++    /// with the host.
++    pub embed_salt: Option<u64>,
++    /// A presentation was open. Closing the last one asks the host to drop the tab.
++    embed_had_doc: bool,
++    /// File › Close finished while embedded. The host reads this and closes its tab.
++    pub embed_closed: bool,
+ }
+ 
+ fn grid_options_touched(p: &Value) -> bool {
+@@ -580,6 +587,42 @@ impl SlideApp {
+             twisting: false,
+             next_file_id: 1,
+             pending_files: Vec::new(),
++            embed_salt: None,
++            embed_had_doc: false,
++            embed_closed: false,
++        }
++    }
++
++    /// Persistent widget id. Unsalted when this app owns the window; salted per host tab when embedded.
++    pub fn scope(&self, key: impl std::hash::Hash + std::fmt::Debug) -> egui::Id {
++        match self.embed_salt {
++            Some(salt) => egui::Id::new(("deckcraft-embed", salt, key)),
++            None => egui::Id::new(key),
++        }
++    }
++
++    /// Put this app's fonts, including the named `bold` family, back after another tab
++    /// called `set_fonts`. The host calls this after `logic` on the frame the tab becomes
++    /// visible. `ui` skips while `fonts_ready` is false; the next pass paints.
++    pub fn prepare_embed_fonts(&mut self, ctx: &egui::Context) {
++        if self.embed_salt.is_none() {
++            return;
++        }
++        theme::install_fonts_with(ctx, &self.ui_fonts.faces);
++        self.styled = true;
++        self.restyle = false;
++        self.fonts_ready = false;
++        ctx.request_repaint();
++    }
++
++    fn note_embed_close(&mut self) {
++        if self.embed_salt.is_none() {
++            return;
++        }
++        if self.session.active().is_some() {
++            self.embed_had_doc = true;
++        } else if self.embed_had_doc {
++            self.embed_closed = true;
+         }
+     }
+ 
+@@ -1299,6 +1342,8 @@ impl SlideApp {
+                 Ok(_) => self.set_status("Saved"),
+                 Err(e) => self.set_status(e.to_string()),
+             }
++        } else if self.embed_salt.is_some() {
++            self.save_as_dialog("pptx");
+         } else {
+             self.save_as_dialog("deckcraft");
+         }
+@@ -1514,18 +1559,24 @@ impl SlideApp {
+ 
+     /// Per-frame logic before layout: styles, control requests, screenshots, shortcuts.
+     pub fn logic(&mut self, ctx: &egui::Context) {
+-        let scale = self.ui.ui_scale.clamp(0.5, 3.0);
+-        if (ctx.zoom_factor() - scale).abs() > 1e-3 {
+-            ctx.set_zoom_factor(scale);
++        if self.embed_salt.is_none() {
++            let scale = self.ui.ui_scale.clamp(0.5, 3.0);
++            if (ctx.zoom_factor() - scale).abs() > 1e-3 {
++                ctx.set_zoom_factor(scale);
++            }
+         }
+         if !self.styled {
+             theme::install_fonts_with(ctx, &self.ui_fonts.faces);
+             self.styled = true;
+-            self.restyle = true;
++            if self.embed_salt.is_none() {
++                self.restyle = true;
++            }
+         } else {
+             self.fonts_ready = true;
+         }
+-        if self.restyle {
++        if self.embed_salt.is_some() {
++            self.restyle = false;
++        } else if self.restyle {
+             theme::apply(ctx, &theme::Tokens::for_brightness(self.ui.brightness));
+             self.restyle = false;
+         }
+@@ -1548,8 +1599,12 @@ impl SlideApp {
+         }
+         self.collect_screenshots(ctx);
+         self.issue_screenshots(ctx);
+-        // Closing the window with unsaved changes asks first.
+-        if ctx.input(|i| i.viewport().close_requested()) && !self.quit_confirmed && self.session.documents().iter().any(|d| d.is_dirty()) {
++        // Closing the window with unsaved changes asks first. An embedded host owns that window.
++        if self.embed_salt.is_none()
++            && ctx.input(|i| i.viewport().close_requested())
++            && !self.quit_confirmed
++            && self.session.documents().iter().any(|d| d.is_dirty())
++        {
+             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+             self.show = None;
+             if self.dialog.as_ref().is_none_or(|d| d.id != "quit") {
+@@ -1576,6 +1631,7 @@ impl SlideApp {
+             }
+         }
+         canvas::trackpad_twist(self, ctx);
++        self.note_embed_close();
+     }
+ 
+     /// Borrow faces for interface text in scripts the interface fonts lack (#101): the open
+@@ -1792,7 +1848,9 @@ impl SlideApp {
+         self.sync_backstage();
+         self.keyboard(&ctx);
+         self.sync_backstage();
+-        ribbon::title_bar(self, ui);
++        if self.embed_salt.is_none() {
++            ribbon::title_bar(self, ui);
++        }
+         if self.backstage.is_none() && self.session.active().is_some() {
+             ribbon::show(self, ui);
+             status::status_bar(self, ui);
+@@ -1843,6 +1901,7 @@ impl SlideApp {
+         }
+         self.drain_requests();
+         doc_window::show(self, &ctx);
++        self.note_embed_close();
+         self.perf.frame_ms = now_ms() - t0;
+     }
+ 
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index 1847d47..506f564 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -1,5 +1,7 @@
+ //! Design tokens (light, PowerPoint-like; and dark) and fonts for the UI.
+ 
++use std::sync::{Arc, OnceLock};
++
+ use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Visuals};
+ use serde::{Deserialize, Serialize};
+ 
+@@ -191,6 +193,7 @@ pub fn font_definitions(extra: &[std::sync::Arc<deckcraft_fonts::FontFace>]) ->
+     bold.extend(defs.families.get(&FontFamily::Proportional).cloned().unwrap_or_default());
+     defs.families.insert(FontFamily::Name("bold".into()), bold);
+     add_fallback_faces(&mut defs, extra);
++    merge_host_fonts(&mut defs);
+     // The Japanese interface face (the first one when Inter isn't embedded) hints its en and em
+     // dashes, bars thinner than a pixel, down to nothing, so they drew as gaps in interface text;
+     // unhinted, they draw.
+@@ -204,6 +207,41 @@ pub fn font_definitions(extra: &[std::sync::Arc<deckcraft_fonts::FontFace>]) ->
+     defs
+ }
+ 
++/// Extra faces a host app injects (OneOffice's bundled CJK font). The first call wins.
++/// Empty unless [`set_host_fallback_fonts`] ran, so DeckCraft's own tests stay stable.
++static HOST_FONTS: OnceLock<Vec<(String, FontData)>> = OnceLock::new();
++
++/// Registers faces merged into every DeckCraft font chain. Call once, before the first frame
++/// that builds fonts. Each face is also placed first in the proportional and monospace families,
++/// which is what a host shell uses for its own chrome.
++pub fn set_host_fallback_fonts(fonts: Vec<(String, FontData)>) {
++    let _ = HOST_FONTS.set(fonts);
++}
++
++fn merge_host_fonts(defs: &mut FontDefinitions) {
++    let Some(host) = HOST_FONTS.get() else { return };
++    let mut keys = Vec::new();
++    for (key, data) in host {
++        defs.font_data.insert(key.clone(), Arc::new(data.clone()));
++        keys.push(key.clone());
++    }
++    for list in defs.families.values_mut() {
++        for key in &keys {
++            if !list.contains(key) {
++                list.push(key.clone());
++            }
++        }
++    }
++    for family in [FontFamily::Proportional, FontFamily::Monospace] {
++        if let Some(chain) = defs.families.get_mut(&family) {
++            for key in keys.iter().rev() {
++                chain.retain(|item| item != key);
++                chain.insert(0, key.clone());
++            }
++        }
++    }
++}
++
+ /// Add `faces` after every other font of each interface family (the last fallbacks).
+ pub fn add_fallback_faces(defs: &mut FontDefinitions, faces: &[std::sync::Arc<deckcraft_fonts::FontFace>]) {
+     for f in faces {

@@ -1,4 +1,4 @@
-//! 最近打开的文件。只记录通过打开动作进来的 docx / xlsx / xlsm / xls / xlsb / ods / pptx。
+//! 最近打开的文件。只记录通过打开动作进来的 doc / docx / xlsx / xlsm / xls / xlsb / ods / pptx。
 
 use std::fs;
 use std::path::{Path, PathBuf};

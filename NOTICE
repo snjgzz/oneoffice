@@ -19,3 +19,29 @@ OneOffice applies patches/gridcraft-embed.patch so SheetApp can render inside a
 document tab. Upstream copyright notices and license files are kept in the submodule.
 The ArtCraft name, wordmark and logos are trademarks of the ArtCraft Team and are
 not used by OneOffice.
+
+WordCraft
+https://github.com/storytold/wordcraft
+Copyright (c) 2026 ArtCraft Team and the WordCraft contributors.
+Licensed under the MIT License or the Apache License, Version 2.0, at your option.
+Vendored as a git submodule at vendor/wordcraft, pinned to
+e127a080a162eb40d7cc208c73421573399e8f3b.
+OneOffice applies patches/wordcraft-embed.patch so WordApp can render inside a
+document tab. Upstream copyright notices and license files are kept in the submodule.
+WordCraft bundles additional fonts and word lists under their own terms; see
+vendor/wordcraft/NOTICE and vendor/wordcraft/ATTRIBUTION.md.
+The ArtCraft name, wordmark and logos are trademarks of the ArtCraft Team and are
+not used by OneOffice.
+
+DeckCraft
+https://github.com/storytold/deckcraft
+Copyright (c) 2026 ArtCraft Team and the DeckCraft contributors.
+Licensed under the MIT License or the Apache License, Version 2.0, at your option.
+Vendored as a git submodule at vendor/deckcraft, pinned to
+9859da39255c0262cd592bb57101d7f2fa961f72.
+OneOffice applies patches/deckcraft-embed.patch so SlideApp can render inside a
+document tab. Upstream copyright notices and license files are kept in the submodule.
+DeckCraft bundles fonts, Lucide icon paths and media codecs under their own terms;
+see vendor/deckcraft/NOTICE and vendor/deckcraft/ATTRIBUTION.md.
+The ArtCraft name, wordmark and logos are trademarks of the ArtCraft Team and are
+not used by OneOffice.

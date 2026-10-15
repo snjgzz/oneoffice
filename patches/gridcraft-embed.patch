@@ -173,10 +173,10 @@ index 97b787e..45172ed 100644
              ui.set_min_width(190.0);
              let insert_copied = insert_copied_item(app);
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index f96cdac..dd05227 100644
+index f96cdac..cb3d862 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
-@@ -263,6 +263,10 @@ pub struct SheetApp {
+@@ -263,6 +263,15 @@ pub struct SheetApp {
      /// holding other text. Once the cut has been pasted, Paste leaves this text alone.
      cut_text: Option<String>,
      pub started: f64,
@@ -184,26 +184,57 @@ index f96cdac..dd05227 100644
 +    /// and theme/zoom takeover stay with the host, and persistent widget ids are salted with it
 +    /// so two embedded workbooks do not share egui memory.
 +    pub embed_salt: Option<u64>,
++    /// A document was open in this embedded app. Closing the last one asks the host to drop the
++    /// tab instead of creating a blank workbook.
++    embed_had_doc: bool,
++    /// File › Close finished while embedded. The host reads this and closes its tab.
++    pub embed_closed: bool,
  }
  
  impl SheetApp {
-@@ -306,6 +310,15 @@ impl SheetApp {
+@@ -306,9 +315,41 @@ impl SheetApp {
              clipboard_text_at_copy: None,
              cut_text: None,
              started: now_ms(),
 +            embed_salt: None,
-+        }
-+    }
-+
++            embed_had_doc: false,
++            embed_closed: false,
+         }
+     }
+ 
 +    /// Persistent widget id. Unsalted when this app owns the window; salted per host tab when embedded.
 +    pub fn scope(&self, key: &str) -> egui::Id {
 +        match self.embed_salt {
 +            Some(salt) => egui::Id::new(("gridcraft-embed", salt, key)),
 +            None => egui::Id::new(key),
-         }
-     }
- 
-@@ -1002,7 +1015,12 @@ impl SheetApp {
++        }
++    }
++
++    /// Put this app's named font families back after another tab called `set_fonts`.
++    /// The host calls this after `logic` on the frame the tab becomes visible.
++    /// `ui` skips until the next pass, which is when egui applies the new definitions.
++    pub fn prepare_embed_fonts(&mut self, ctx: &egui::Context) {
++        if self.embed_salt.is_none() {
++            return;
++        }
++        if self.fonts_bound.is_empty() {
++            ctx.set_fonts(theme::font_definitions_for_language(self.ui.language));
++        } else {
++            ctx.set_fonts(theme::font_definitions_with(
++                self.ui.language,
++                &self.fonts_bound,
++            ));
++        }
++        self.fonts_ready = false;
++        self.fonts_set = true;
++        self.fonts_rebind = false;
++        ctx.request_repaint();
++    }
++
+     /// One-time context setup: start cataloging the machine's fonts, then install the fonts and
+     /// visuals. Workbook-specific fonts are bound later, once the scan is done (see [`logic`]).
+     ///
+@@ -1002,7 +1043,12 @@ impl SheetApp {
              if self.fonts_set {
                  self.fonts_ready = true;
              } else {
@@ -217,7 +248,7 @@ index f96cdac..dd05227 100644
                  self.fonts_set = true;
                  // The rebuilt set has no workbook fonts yet: bind them again once it is active.
                  self.fonts_bound.clear();
-@@ -1029,32 +1047,34 @@ impl SheetApp {
+@@ -1029,32 +1075,34 @@ impl SheetApp {
                  }
              }
          }
@@ -276,7 +307,23 @@ index f96cdac..dd05227 100644
          control::poll(self, ctx);
          // Files read asynchronously (web file picker, dropped files).
          let arrived: Vec<(String, Vec<u8>)> = self
-@@ -1106,7 +1126,9 @@ impl SheetApp {
+@@ -1079,7 +1127,14 @@ impl SheetApp {
+             }
+             self.after_engine();
+         }
+-        if self.session.active().is_none() {
++        if self.session.active().is_some() {
++            self.embed_had_doc = true;
++        } else if self.embed_salt.is_some() {
++            // The host owns the tab. A blank workbook here is what made File › Close look empty.
++            if self.embed_had_doc {
++                self.embed_closed = true;
++            }
++        } else {
+             self.session.new_workbook();
+         }
+     }
+@@ -1106,7 +1161,9 @@ impl SheetApp {
          if self.backstage.is_none() {
              self.ribbon_keys(&ctx);
          }
@@ -287,7 +334,7 @@ index f96cdac..dd05227 100644
          if self.backstage.is_some() {
              // File tab: the Backstage view replaces everything below the title bar.
              backstage::show(self, ui);
-@@ -1156,8 +1178,10 @@ impl SheetApp {
+@@ -1156,8 +1213,10 @@ impl SheetApp {
              self.store_view_state();
              let _ = self.session.run("file.save", json!({}));
          }

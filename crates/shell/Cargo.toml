@@ -25,3 +25,7 @@ chrono.workspace = true
 rfd.workspace = true
 gridcraft-engine = { path = "../../vendor/gridcraft/crates/engine" }
 gridcraft-ui-egui = { path = "../../vendor/gridcraft/crates/ui-egui" }
+wordcraft-engine = { path = "../../vendor/wordcraft/crates/engine" }
+wordcraft-ui-egui = { path = "../../vendor/wordcraft/crates/ui-egui" }
+deckcraft-engine = { path = "../../vendor/deckcraft/crates/engine" }
+deckcraft-ui-egui = { path = "../../vendor/deckcraft/crates/ui-egui" }

@@ -6,13 +6,14 @@ use std::sync::{Arc, Mutex};
 use egui::{Modifiers, Pos2, ViewportCommand};
 
 use crate::chrome;
-use crate::document::PlaceholderEditor;
-use crate::editor::{DocTab, Tab};
+use crate::deck::{self, DeckEditor};
+use crate::editor::{DocTab, HostEvent, Tab};
 use crate::kind::DocKind;
 use crate::platform;
 use crate::recent::RecentList;
 use crate::sheet::{self, SheetEditor};
 use crate::theme::{self, BG};
+use crate::word::{self, WordEditor};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HomeView {
@@ -34,9 +35,11 @@ pub(crate) struct Shell {
     pub(crate) menu: Option<Pos2>,
     pub(crate) menu_just_opened: bool,
     sent_title: String,
-    sheet_opens: Arc<Mutex<Vec<PathBuf>>>,
+    host: Arc<Mutex<Vec<HostEvent>>>,
     pending_close: Option<usize>,
     logic_tab: usize,
+    /// 当前字体表属于哪个文档标签。首页是 0。切到另一个文档时要重新安装它的字体。
+    font_tab: u64,
 }
 
 pub(crate) fn run(paths: Vec<String>) -> eframe::Result {
@@ -52,6 +55,8 @@ pub(crate) fn run(paths: Vec<String>) -> eframe::Result {
         Box::new(move |cc| {
             theme::install(&cc.egui_ctx);
             sheet::register_cjk_font();
+            word::register_cjk_font();
+            deck::register_cjk_font();
             Ok(Box::new(Shell::new(paths)) as Box<dyn eframe::App>)
         }),
     )
@@ -90,9 +95,10 @@ impl Shell {
             menu: None,
             menu_just_opened: false,
             sent_title: String::new(),
-            sheet_opens: Arc::new(Mutex::new(Vec::new())),
+            host: Arc::new(Mutex::new(Vec::new())),
             pending_close: None,
             logic_tab: 0,
+            font_tab: 0,
         };
         for path in paths {
             shell.open_existing(path);
@@ -125,10 +131,10 @@ impl Shell {
             .set_title("打开文件")
             .add_filter(
                 "Office 文档",
-                &["docx", "xlsx", "xlsm", "xls", "xlsb", "ods", "pptx"],
+                &["doc", "docx", "xlsx", "xlsm", "xls", "xlsb", "ods", "pptx"],
             )
             .add_filter("表格", &["xlsx", "xlsm", "xls", "xlsb", "ods"])
-            .add_filter("文字", &["docx"])
+            .add_filter("文字", &["doc", "docx"])
             .add_filter("演示", &["pptx"])
             .pick_file();
         if let Some(path) = picked {
@@ -212,15 +218,29 @@ impl Shell {
         }
         let id = self.next_id;
         self.next_id += 1;
+        let host = Arc::clone(&self.host);
         let editor: Box<dyn crate::editor::DocumentEditor> = match kind {
+            DocKind::Word => {
+                let word = match &path {
+                    Some(path) => WordEditor::open(id, path, host),
+                    None => WordEditor::blank(id, title, host),
+                };
+                Box::new(word)
+            }
             DocKind::Sheet => {
                 let sheet = match &path {
-                    Some(path) => SheetEditor::open(id, path, Arc::clone(&self.sheet_opens)),
-                    None => SheetEditor::blank(id, title, Arc::clone(&self.sheet_opens)),
+                    Some(path) => SheetEditor::open(id, path, host),
+                    None => SheetEditor::blank(id, title, host),
                 };
                 Box::new(sheet)
             }
-            DocKind::Word | DocKind::Deck => Box::new(PlaceholderEditor::new(id, kind, title)),
+            DocKind::Deck => {
+                let deck = match &path {
+                    Some(path) => DeckEditor::open(id, path, host),
+                    None => DeckEditor::blank(id, title, host),
+                };
+                Box::new(deck)
+            }
         };
         let doc = DocTab::new(id, path, editor);
         let tab = match kind {
@@ -320,15 +340,24 @@ impl Shell {
         }
     }
 
-    fn drain_sheet_opens(&mut self) {
+    fn drain_host(&mut self) {
         let queued = std::mem::take(
             &mut *self
-                .sheet_opens
+                .host
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
-        for path in queued {
-            self.open_existing(path);
+        for event in queued {
+            match event {
+                HostEvent::Open(path) => self.open_existing(path),
+                HostEvent::Close(id) => {
+                    if let Some(index) = self.tabs.iter().position(|tab| tab.widget_id() == id) {
+                        // 应用自己的「关闭」已经问过未保存的更改。
+                        self.pending_close = None;
+                        self.remove_tab(index);
+                    }
+                }
+            }
         }
     }
 
@@ -391,7 +420,7 @@ impl eframe::App for Shell {
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.drain_sheet_opens();
+        self.drain_host();
         if self.active != self.logic_tab {
             egui::Popup::close_all(ctx);
             let focused = ctx.memory(|memory| memory.focused());
@@ -403,6 +432,14 @@ impl eframe::App for Shell {
         if let Some(tab) = self.tabs.get_mut(self.active) {
             tab.logic(ctx);
         }
+        let font_key = self.tabs.get(self.active).map(Tab::widget_id).unwrap_or(0);
+        if font_key != 0 && font_key != self.font_tab {
+            if let Some(tab) = self.tabs.get_mut(self.active) {
+                tab.prepare_embed_fonts(ctx);
+            }
+            self.font_tab = font_key;
+        }
+        self.drain_host();
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -420,6 +457,10 @@ impl eframe::App for Shell {
             .show(ui, |ui| chrome::show_tab_bar(ui, self));
 
         let home = self.tabs.get(self.active).is_some_and(Tab::is_home);
+        // 快捷键在这一帧的 logic 之后才改 active。新标签的字体会在下一帧 logic 里装上，
+        // 这一帧如果立刻画，epaint 会因为缺具名族（deckcraft 的 bold）而 panic。
+        let font_key = self.tabs.get(self.active).map(Tab::widget_id).unwrap_or(0);
+        let fonts_ready = font_key == 0 || font_key == self.font_tab;
         if home {
             egui::Panel::left("sidebar")
                 .exact_size(theme::SIDEBAR_W)
@@ -448,7 +489,7 @@ impl eframe::App for Shell {
                         }),
                 )
                 .show(ui, |ui| self.show_home_main(ui));
-        } else {
+        } else if fonts_ready {
             egui::CentralPanel::default()
                 .frame(egui::Frame::new().inner_margin(egui::Margin::same(0)))
                 .show(ui, |ui| {
@@ -456,8 +497,11 @@ impl eframe::App for Shell {
                         tab.editor_ui(ui);
                     }
                 });
+        } else {
+            ui.ctx().request_repaint();
         }
 
+        self.drain_host();
         self.note_saved_path();
         self.show_new_menu(ui.ctx());
         self.show_close_prompt(ui.ctx());

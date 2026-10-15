@@ -1,16 +1,55 @@
 # OneOffice
 
-OneOffice 是一个类似 WPS 的集成办公套件外壳：文字、表格、演示共用一个原生窗口。文字标签嵌 [wordcraft](https://github.com/storytold/wordcraft) 的 `WordApp`，表格标签嵌 [gridcraft](https://github.com/storytold/gridcraft) 的 `SheetApp`，演示标签嵌 [deckcraft](https://github.com/storytold/deckcraft) 的 `SlideApp`。各自保留功能区、画布和状态栏。
+文字、表格和演示放在同一个原生窗口里。界面以中文为主，用 Rust 和 egui 写成，文件留在你自己的电脑上。
 
-界面是中文。侧栏只有「首页」和「最近」，「设置」钉在底部。最近文件记在本机配置目录的 `recent.json` 里，收通过打开动作进来的 `.doc` / `.docx` / `.xlsx` / `.xlsm` / `.xls` / `.xlsb` / `.ods` / `.pptx`。`.doc` 由 wordcraft 的 docbin 读取，保存写成 `.docx`。`.xls`、`.xlsb`、`.ods` 由 gridcraft 导入，保存时写成 `.xlsx`。
+<p align="center">
+  <a href="LICENSE-MIT"><img alt="许可证：MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2F6FED"></a>
+  <img alt="需要 Rust 1.95 或更新" src="https://img.shields.io/badge/rust-1.95%2B-1FA463?logo=rust&logoColor=white">
+  <a href="https://github.com/snjgzz/oneoffice/actions/workflows/ci.yml"><img alt="持续集成" src="https://github.com/snjgzz/oneoffice/actions/workflows/ci.yml/badge.svg"></a>
+</p>
 
-## English
+<p align="center">
+  <a href="#功能">功能</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#系统要求">系统要求</a> ·
+  <a href="#已知限制">已知限制</a> ·
+  <a href="#参与贡献">贡献</a> ·
+  <a href="#许可证与归属">许可证</a>
+</p>
 
-OneOffice is the shared native window for a WPS-style office suite. Document tabs embed wordcraft (`WordApp`), spreadsheet tabs embed gridcraft (`SheetApp`), and presentation tabs embed deckcraft (`SlideApp`). The UI is Chinese. Recent files are a local JSON list of documents opened from the native file dialog.
+In short: one native window for a word processor, a spreadsheet and slides. The interface is mainly Chinese. It is not a LibreOffice-level office suite, and it is not an official WPS, Microsoft or storytold product.
 
-## 在 Mac 上构建和运行
+<p align="center">
+  <img src="docs/images/three-tabs.png" width="920" alt="OneOffice 同时开着文字、表格和演示。当前标签是一张中文表格，金额列有材料和人工，合计是公式。">
+  <br>
+  <sub>Linux 上从源码跑起来的窗口：文字、表格、演示三个标签同时开着。</sub>
+</p>
 
-需要 Rust 1.95 或更新（edition 2024）。[rustup](https://rustup.rs/) 的 stable 即可。Apple Silicon 是主要目标，Intel Mac 同一套代码也能编。
+## 功能
+
+- **三种文档，一个窗口。** 文字、表格、演示各自一个标签，可以一起开着，用 ⌘1–9 切换。每种都能打开、编辑、保存。
+- **中文界面。** 壳、文字和表格的功能区是中文。演示的功能区目前仍是英文，幻灯片里的中文可以显示。
+- **常见 Office 文件。** 打开 `.doc`、`.docx`、`.xlsx`、`.xlsm`、`.xls`、`.xlsb`、`.ods`、`.pptx`。旧格式和新格式的保存方式不一样，见 [已知限制](#已知限制)。
+- **最近文件在本机。** 从打开对话框进来的文件记在配置目录的 `recent.json` 里，没有账号。
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/images/word.png" alt="文字标签：中文功能区，页面上是一段中文和英文。">
+<p align="center"><sub>文字。功能区是中文。</sub></p>
+</td>
+<td width="50%" valign="top">
+<img src="docs/images/slides.png" alt="演示标签：英文功能区，幻灯片标题是中文。">
+<p align="center"><sub>演示。功能区仍是英文。</sub></p>
+</td>
+</tr>
+</table>
+
+编辑能力来自三个独立项目，嵌在对应标签里：[wordcraft](https://github.com/storytold/wordcraft)、[gridcraft](https://github.com/storytold/gridcraft)、[deckcraft](https://github.com/storytold/deckcraft)。OneOffice 提供窗口、标签和最近文件，不替代这三家自己的仓库。
+
+## 快速开始
+
+需要 Rust 1.95 或更新。[rustup](https://rustup.rs/) 的 stable 即可。
 
 ```sh
 git clone --recurse-submodules https://github.com/snjgzz/oneoffice
@@ -21,7 +60,7 @@ tools/apply-deckcraft-patch.sh
 cargo run -p oneoffice
 ```
 
-已经克隆过、子模块是空的：
+克隆时如果没带上子模块，先补一次再打补丁：
 
 ```sh
 git submodule update --init --recursive
@@ -30,36 +69,46 @@ tools/apply-wordcraft-patch.sh
 tools/apply-deckcraft-patch.sh
 ```
 
-打开已有文件：
+三个脚本会改 `vendor/` 里的工作区，让上游编辑器画在这个窗口里。不打补丁，工程编不过。脚本可以重复执行。
+
+打开一个已有文件：
 
 ```sh
 cargo run -p oneoffice -- ~/Documents/预算.xlsx
 ```
 
-扩展名是 doc、docx、xlsx、xlsm、xls、xlsb、ods 或 pptx。文件会成为新标签，并写进最近列表。三种文档都可以编辑，用 Ctrl+S / ⌘S 或功能区「文件」保存。没有路径的新文档会弹出另存为。
+要一个去掉调试信息的二进制：
 
-最近列表的位置：
+```sh
+cargo build --release -p oneoffice
+```
 
-- macOS：`~/Library/Application Support/OneOffice/recent.json`
-- Linux：`$XDG_CONFIG_HOME/OneOffice/recent.json`，未设置时是 `~/.config/OneOffice/recent.json`
+产物在 `target/release/oneoffice`。演示用的音视频解码器会一起编进去，这个文件大约 130 MB。
 
-## Linux
+### 在 Mac 上打开未签名的包
 
-能编过、能跑。系统标题栏在 Linux 上会关掉，窗口按钮画在标签栏左侧，因为 macOS 的 full-size content view 和红绿灯是平台能力。编译前安装：
+仓库里没有签过名的安装包。你自己编出的应用，或者自己打的未签名 `.app` / `.dmg`，第一次打开时 Gatekeeper 通常会拦住。在 Finder 里按住 Control 点按该应用（或右键），选择「打开」，再确认一次。
+
+## 系统要求
+
+- **Rust** 1.95 或更新（edition 2024）。仓库里的 `rust-toolchain.toml` 用的是 stable。
+- **macOS**：主要在 Apple Silicon 上开发和打包。Intel Mac 用同一套代码可以编，但不是平时验证的机器。
+- **Linux** 能编过、能跑。系统标题栏会关掉，窗口按钮画在标签栏左侧。编译前安装：
 
 ```sh
 sudo apt-get install -y pkg-config libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev \
   libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-0 libssl-dev libwayland-dev
-cargo run -p oneoffice
 ```
+
+Windows 还没有当作目标验证过。
 
 ## 快捷键
 
-修饰键在 macOS 上是 ⌘，在 Linux 上是 Ctrl。
+修饰键在 macOS 上是 ⌘，在 Linux 上是 Ctrl。⌘S / Ctrl+S 留给当前文档保存，壳不拦截。
 
 | 按键 | 作用 |
 | --- | --- |
-| ⌘T | 回到首页标签 |
+| ⌘T | 回到首页 |
 | ⌘W | 关闭当前文档标签（首页关不掉） |
 | ⌘1–9 | 切换标签，1 是首页 |
 | ⌘O | 打开文件 |
@@ -67,38 +116,56 @@ cargo run -p oneoffice
 
 首页上双击最近文件会再打开它。右键可以打开所在文件夹，或从列表里移除。
 
+最近列表的位置：
+
+- macOS：`~/Library/Application Support/OneOffice/recent.json`
+- Linux：`$XDG_CONFIG_HOME/OneOffice/recent.json`，未设置时是 `~/.config/OneOffice/recent.json`
+
+## 已知限制
+
+- 格式兼容远不到 LibreOffice 或桌面 Office。复杂排版、宏、修订和一部分对象会丢，或者直接打不开。
+- `.doc` 可以读，保存时写成 `.docx`。`.xls`、`.xlsb`、`.ods` 可以导入，保存时写成 `.xlsx`。
+- 演示的功能区、菜单和状态栏仍是英文。
+- 界面字体是 Noto Sans SC 的 GB2312 子集，子集以外的汉字会缺字形。
+- 同一类文档开着多个标签时，少数对话框或浮层可能互相干扰。
+- 没有代码签名，也没有现成的安装包。
+
 ## 仓库结构
 
 ```
-crates/shell          可执行文件 oneoffice，以及同名库
-vendor/gridcraft      storytold/gridcraft 子模块，固定提交
-vendor/wordcraft      storytold/wordcraft 子模块，固定提交
-vendor/deckcraft      storytold/deckcraft 子模块，固定提交
-patches/              嵌进壳所需的补丁
+crates/shell       可执行文件 oneoffice，以及同名库
+vendor/wordcraft   storytold/wordcraft，固定在某一提交
+vendor/gridcraft   storytold/gridcraft，固定在某一提交
+vendor/deckcraft   storytold/deckcraft，固定在某一提交
+patches/           把三个编辑器嵌进壳的补丁
+tools/             打补丁的脚本，以及字体子集工具
+docs/images/       本页用的界面截图
 ```
 
-库导出 `DocKind`、`Tab` 和 `DocumentEditor`。每种标签一份自己的 `Session` 和应用。三个上游仓库都不加入本仓库的 workspace members，它们自己的 `Cargo.toml` 继续解析 `.workspace = true`。
+三个上游仓库不加入本仓库的 workspace。怎么嵌、怎么跟着上游改，写在 [`patches/README.md`](patches/README.md)。
 
-根 `Cargo.toml` 把 `krilla` 钉到 craft-libs `c3487320`（和 deckcraft 自己的 `[patch.crates-io]` 同一提交）。`craft-pdf` 需要这个补丁过的 `krilla`；被排除的子模块工作区里的 `[patch]` 不会作用到 OneOffice。wordcraft 的 PDF 导出因此也走这份 fork。
+## 参与贡献
 
-嵌入补丁让应用在 `embed_salt` 有值时去掉自己的标题栏、窗口标题和主题/缩放接管。壳再用标签 id 隔开面板。补丁内容和更新方法在 `patches/README.md`。
+问题和改动请开 [Issue](https://github.com/snjgzz/oneoffice/issues) 或 Pull Request。
+
+改标签里的编辑器之前，先看 [`patches/README.md`](patches/README.md)。补丁打在子模块的工作区上，不要把打过补丁的子模块提交成上游仓库里不存在的提交。
 
 ## 路线图
 
-1. 主窗口壳。
-2. gridcraft、wordcraft、deckcraft 嵌进各自的标签：打开、编辑、保存，多种标签可以同时开着。
-3. 演示里的音视频解码器目前整包编进二进制。如果体积成为问题，再把 codec 做成可选 feature。
+已经有的：主窗口，文字、表格、演示同时开着，以及上面列出的那些 Office 文件的打开和保存。
 
-## 许可证
+接着会做的，不排期：
 
-代码以 MIT OR Apache-2.0 双许可发布，见 `LICENSE-MIT` 和 `LICENSE-APACHE`。
+- 演示界面改成中文。
+- 如果发布体积碍事，再把音视频解码器做成可选功能。
+- 用更多真实文件试打开和保存，把丢内容、打不开的情况记下来，而不是先宣称兼容某一整套格式。
 
-界面字体是 Noto Sans SC Regular 2.004 的子集（GB2312 加常用符号），字体单独使用 SIL Open Font License 1.1。版权归 Adobe，保留字体名 Source。许可证全文在 `crates/shell/assets/fonts/OFL.txt`。子集可以用 `tools/subset_noto.py` 重新生成。GB2312 以外的汉字会缺字形。
+## 许可证与归属
 
-## 归属
+代码以 MIT OR Apache-2.0 双许可发布，见 [`LICENSE-MIT`](LICENSE-MIT) 和 [`LICENSE-APACHE`](LICENSE-APACHE)。
 
-OneOffice 不隶属于 WPS、Microsoft 或 storytold。
+OneOffice 不隶属于 WPS、Microsoft 或 storytold，也不使用它们或 ArtCraft 的名称做背书。
 
-gridcraft、wordcraft、deckcraft 以子模块形式放在 `vendor/`，版权和 MIT OR Apache-2.0 许可证保留在它们自己的仓库里。`NOTICE` 写了项目名、仓库地址、固定的提交和许可证。不使用它们或 ArtCraft 的商标做背书。
+文字、表格和演示的编辑来自上面三个子模块，版权和 MIT OR Apache-2.0 许可证留在各自仓库。固定的提交和补丁名写在 [`NOTICE`](NOTICE)。
 
-Noto Sans SC 只作为界面字体打包，按 OFL 随附许可证；不把保留名 Source 用在衍生字体上。
+界面字体是 Noto Sans SC Regular 2.004 的子集，单独使用 SIL Open Font License 1.1。版权归 Adobe，保留字体名 Source。许可证全文在 [`crates/shell/assets/fonts/OFL.txt`](crates/shell/assets/fonts/OFL.txt)。

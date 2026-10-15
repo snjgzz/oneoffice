@@ -9,21 +9,15 @@
 | `OneOffice.iconset/` | `iconutil` 用的各档 PNG |
 | `OneOffice.icns` | 已经生成的图标，打进 `.app` 时用这个 |
 
-仓库还没有签名过的安装包，也没有自动打包脚本。自己组装 `.app` 时，把图标放到包内的资源目录，文件名保持 `OneOffice.icns`：
+打未签名的 `.dmg`（需要本机的 `hdiutil`，并且已经 `cargo build --release -p oneoffice`）：
 
 ```sh
-mkdir -p OneOffice.app/Contents/Resources
-cp packaging/macos/OneOffice.icns OneOffice.app/Contents/Resources/OneOffice.icns
+packaging/macos/package-dmg.sh v0.1.0
 ```
 
-`Contents/Info.plist` 里对应写：
+脚本会把 release 二进制放进 `OneOffice.app/Contents/MacOS/oneoffice`，把 `OneOffice.icns` 复制到 `Contents/Resources/`，并用 [`Info.plist`](Info.plist) 填版本号。`CFBundleIconFile` 写的是 `OneOffice`，不带 `.icns` 后缀。Finder 和程序坞读的是包里的这个文件。
 
-```xml
-<key>CFBundleIconFile</key>
-<string>OneOffice</string>
-```
-
-`CFBundleIconFile` 不写 `.icns` 后缀。Finder 和程序坞读的是包里的这个文件，不是仓库里的路径。
+产物是 `dist/OneOffice-<版本>-macos-<架构>.dmg`。GitHub 的 macOS runner 是 Apple Silicon，所以 Actions 打出来的是 `macos-aarch64`。这个包没有签名。
 
 在 Mac 上要从 iconset 重新生成 icns（需要本机的 `iconutil`）：
 

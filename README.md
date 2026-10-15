@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="#为什么选-oneoffice">为什么选</a> ·
   <a href="#功能">功能</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#系统要求">系统要求</a> ·
@@ -30,6 +31,13 @@ In short: one native window for a word processor, a spreadsheet and slides. The 
   <br>
   <sub>Linux 上从源码跑起来的窗口：文字、表格、演示三个标签同时开着。</sub>
 </p>
+
+## 为什么选 OneOffice
+
+对照的是 WPS，不是功能上的一一对应。WPS 是一套商业办公软件，PDF、云文档、模板和会员都在里面。OneOffice 是一个窗口里的文字、表格和演示，免费、开源，许可证是 MIT OR Apache-2.0。格式能覆盖多少，见 [已知限制](#已知限制)。
+
+- **没有广告，也没有会员入口。** 界面上不放推广，也不要求登录。金山办公宣布，2023-12-20 起 WPS Office 国内个人版关闭第三方商业广告（[IT之家当天的报道](https://www.ithome.com/0/740/399.htm)）。2025-07-22，金山办公在自己的社区里回复：第三方广告关了，界面上仍会展示 WPS 自己的新功能和付费权益优惠，并说明这不属于第三方广告（[讨论帖](https://bbs.wps.cn/topic/57864)）。OneOffice 没有这一层。
+- **体积更小，打开的就是这一个程序。** 本仓库的 release 二进制大约 130 MB，音视频解码器算在里面。腾讯软件中心列出的 Windows 版 WPS Office 12.1.0.28505 安装包是 292.66 MB，页面上的更新时间是 2026-09-01（[软件详情](https://pc.qq.com/detail/15/detail_1215.html)，2026-10-15 查阅）。WPS 官网繁体下载页写的下载大小是 5.1 MB、硬盘空间 200 MB 以上（[页面](https://zh-hant.wps.com/office/windows/)，2026-10-15 查阅）。5.1 MB 是在线安装引导，不是装好以后的体积。没有和 WPS 比过启动或编辑速度，所以这里不说谁更快。官方帮助里能查到关闭「办公助手」开机自启的步骤，页面标明的是 WPS Office 2019 PC 个人版（[学堂](https://www.wps.cn/learning/room/d/315960)）。OneOffice 的安装包不写开机启动项。
 
 ## 功能
 
@@ -89,13 +97,37 @@ cargo run -p oneoffice -- ~/Documents/预算.xlsx
 cargo build --release -p oneoffice
 ```
 
-产物在 `target/release/oneoffice`。演示用的音视频解码器会一起编进去，这个文件大约 130 MB。
+产物在 `target/release/oneoffice`（Windows 上是 `oneoffice.exe`）。演示用的音视频解码器会一起编进去，这个文件大约 130 MB。
 
-### 在 Mac 上打开未签名的包
+### 安装包
 
-仓库里没有签过名的安装包。你自己编出的应用，或者自己打的未签名 `.app` / `.dmg`，第一次打开时 Gatekeeper 通常会拦住。在 Finder 里按住 Control 点按该应用（或右键），选择「打开」，再确认一次。
+推送 `v*` tag 之后，[Release workflow](.github/workflows/release.yml) 会编两个未签名的包，并挂到 [GitHub Release](https://github.com/snjgzz/oneoffice/releases) 上：
 
-自己组装 `.app` 时，把 [`packaging/macos/OneOffice.icns`](packaging/macos/OneOffice.icns) 复制到 `OneOffice.app/Contents/Resources/OneOffice.icns`。`Info.plist` 的 `CFBundleIconFile` 写 `OneOffice`。步骤在 [`packaging/macos/README.md`](packaging/macos/README.md)。
+- macOS Apple Silicon：`OneOffice-<版本>-macos-aarch64.dmg`，里面是 `OneOffice.app`，图标用 [`packaging/macos/OneOffice.icns`](packaging/macos/OneOffice.icns)。
+- Windows x86_64：`OneOffice-<版本>-windows-x86_64-setup.exe`。这是 NSIS 安装程序，装到 `C:\Program Files\OneOffice`，开始菜单有快捷方式，没有开机启动项。
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+也可以在 Actions 页面手动运行 Release。填写 tag（例如 `v0.1.0`）时，会对这次选中的提交创建或更新 GitHub Release。tag 留空时，只在这次 Actions 运行里保留产物。
+
+本机打 macOS 包需要已经编过 release，并且本机有 `hdiutil`：
+
+```sh
+packaging/macos/package-dmg.sh v0.1.0
+```
+
+### 未签名
+
+这些 `.dmg`、`.app` 和 Windows 安装程序都没有代码签名。Release 说明用的是同一段话，见 [`packaging/RELEASE_NOTES.md`](packaging/RELEASE_NOTES.md)。
+
+macOS 上第一次打开，Gatekeeper 通常会拦住。在 Finder 里按住 Control 点按 OneOffice（或右键），选择「打开」，再确认一次。
+
+Windows 上 SmartScreen 可能提示未知发布者。安装程序会请求管理员权限，因为它写入 `C:\Program Files\OneOffice`。
+
+自己组装 `.app` 时，图标步骤在 [`packaging/macos/README.md`](packaging/macos/README.md)。
 
 ## 系统要求
 
@@ -108,7 +140,7 @@ sudo apt-get install -y pkg-config libgtk-3-dev libxcb-render0-dev libxcb-shape0
   libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-0 libssl-dev libwayland-dev
 ```
 
-Windows 还没有当作目标验证过。
+**Windows。** Release 里的安装包是 x86_64，在 GitHub 的 `windows-latest` 上编译。日常开发没有把 Windows 当作验证机器。
 
 ## 快捷键
 
@@ -136,7 +168,7 @@ Windows 还没有当作目标验证过。
 - 演示的功能区、菜单和状态栏仍是英文。
 - 界面字体是 Noto Sans SC 的 GB2312 子集，子集以外的汉字会缺字形。
 - 同一类文档开着多个标签时，少数对话框或浮层可能互相干扰。
-- 没有代码签名，也没有现成的安装包。
+- 没有代码签名。GitHub Release 上的 macOS `.dmg` 和 Windows 安装程序也未签名，第一次打开时系统会提示。
 
 ## 仓库结构
 
@@ -147,7 +179,9 @@ vendor/gridcraft   storytold/gridcraft，固定在某一提交
 vendor/deckcraft   storytold/deckcraft，固定在某一提交
 patches/           把三个编辑器嵌进壳的补丁
 tools/             打补丁的脚本，以及字体子集工具
-packaging/macos/   应用图标：SVG、iconset 和 OneOffice.icns
+packaging/macos/   应用图标，以及未签名 .dmg 的打包脚本
+packaging/windows/ NSIS 安装脚本（x86_64）
+.github/workflows/ 持续集成，以及按 tag 发布安装包
 docs/images/       本页用的界面截图和图标预览
 ```
 

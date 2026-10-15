@@ -500,7 +500,7 @@ fn card(
     title: &str,
     subtitle: &str,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(vec2(width, 118.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(width, 124.0), Sense::click());
     let stroke = if response.hovered() {
         Stroke::new(1.0, BLUE)
     } else {
@@ -526,21 +526,54 @@ fn card(
     if letter.is_empty() {
         theme::paint_arrow_ne(ui.painter(), badge.shrink(6.0), WHITE);
     }
-    ui.painter().text(
-        pos2(rect.left() + 18.0, rect.bottom() - 40.0),
-        Align2::LEFT_TOP,
-        title,
-        FontId::proportional(15.0),
-        TEXT,
+    // 标题用 LEFT_TOP、副标题用 LEFT_BOTTOM 钉在相距 24px 的两个点上时，
+    // 中文字体的行高比这个空隙大，两行会叠在一起。按实际行高从下往上排。
+    let text_left = rect.left() + 18.0;
+    let text_width = (rect.right() - 14.0 - text_left).max(8.0);
+    let title_galley = one_line(ui, title, 15.0, TEXT, text_width);
+    let subtitle_galley = one_line(ui, subtitle, 12.0, SUB, text_width);
+    let (title_y, subtitle_y) = stacked_text_tops(
+        rect.bottom(),
+        title_galley.size().y,
+        subtitle_galley.size().y,
     );
-    ui.painter().text(
-        pos2(rect.left() + 18.0, rect.bottom() - 16.0),
-        Align2::LEFT_BOTTOM,
-        subtitle,
-        FontId::proportional(12.0),
-        SUB,
-    );
+    ui.painter()
+        .galley(pos2(text_left, title_y), title_galley, TEXT);
+    ui.painter()
+        .galley(pos2(text_left, subtitle_y), subtitle_galley, SUB);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// 卡片文字从底边往上排：副标题贴着底边内边距，标题在它上面，中间留 4px。
+fn stacked_text_tops(bottom: f32, title_h: f32, subtitle_h: f32) -> (f32, f32) {
+    let subtitle_y = bottom - 14.0 - subtitle_h;
+    let title_y = subtitle_y - 4.0 - title_h;
+    (title_y, subtitle_y)
+}
+
+/// 一行文字，超出卡片宽度时截断。
+fn one_line(
+    ui: &egui::Ui,
+    text: &str,
+    size: f32,
+    color: Color32,
+    max_width: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::single_section(
+        text.to_owned(),
+        egui::TextFormat {
+            font_id: FontId::proportional(size),
+            color,
+            ..Default::default()
+        },
+    );
+    job.wrap = egui::text::TextWrapping {
+        max_width,
+        max_rows: 1,
+        break_anywhere: true,
+        ..Default::default()
+    };
+    ui.painter().layout_job(job)
 }
 
 fn menu_row(ui: &mut egui::Ui, label: &str) -> bool {
@@ -598,5 +631,21 @@ fn cell_line(ui: &egui::Ui, draw: bool) {
         let rect = ui.max_rect();
         ui.painter()
             .hline(rect.x_range(), rect.bottom(), Stroke::new(1.0, ROW_LINE));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stacked_text_tops;
+
+    #[test]
+    fn card_title_and_subtitle_do_not_share_a_line() {
+        let title_h = 22.0;
+        let subtitle_h = 18.0;
+        let bottom = 124.0;
+        let (title_y, subtitle_y) = stacked_text_tops(bottom, title_h, subtitle_h);
+        assert!(title_y + title_h <= subtitle_y);
+        assert!(subtitle_y + subtitle_h <= bottom);
+        assert!(subtitle_y - (title_y + title_h) >= 4.0 - f32::EPSILON);
     }
 }

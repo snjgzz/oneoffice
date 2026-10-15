@@ -20,6 +20,12 @@
 In short: one native window for a word processor, a spreadsheet and slides. The interface is mainly Chinese. It is not a LibreOffice-level office suite, and it is not an official WPS, Microsoft or storytold product.
 
 <p align="center">
+  <img src="docs/images/app-icon.png" width="420" alt="OneOffice 图标：青绿到蓝的圆角底，白色粗体 O，后面是三份半透明文档。">
+  <br>
+  <sub>应用图标。源文件和打进 <code>.app</code> 的方法在 <a href="packaging/macos/README.md"><code>packaging/macos</code></a>。</sub>
+</p>
+
+<p align="center">
   <img src="docs/images/three-tabs.png" width="920" alt="OneOffice 同时开着文字、表格和演示。当前标签是一张中文表格，金额列有材料和人工，合计是公式。">
   <br>
   <sub>Linux 上从源码跑起来的窗口：文字、表格、演示三个标签同时开着。</sub>
@@ -89,6 +95,8 @@ cargo build --release -p oneoffice
 
 仓库里没有签过名的安装包。你自己编出的应用，或者自己打的未签名 `.app` / `.dmg`，第一次打开时 Gatekeeper 通常会拦住。在 Finder 里按住 Control 点按该应用（或右键），选择「打开」，再确认一次。
 
+自己组装 `.app` 时，把 [`packaging/macos/OneOffice.icns`](packaging/macos/OneOffice.icns) 复制到 `OneOffice.app/Contents/Resources/OneOffice.icns`。`Info.plist` 的 `CFBundleIconFile` 写 `OneOffice`。步骤在 [`packaging/macos/README.md`](packaging/macos/README.md)。
+
 ## 系统要求
 
 - **Rust** 1.95 或更新（edition 2024）。仓库里的 `rust-toolchain.toml` 用的是 stable。
@@ -139,7 +147,8 @@ vendor/gridcraft   storytold/gridcraft，固定在某一提交
 vendor/deckcraft   storytold/deckcraft，固定在某一提交
 patches/           把三个编辑器嵌进壳的补丁
 tools/             打补丁的脚本，以及字体子集工具
-docs/images/       本页用的界面截图
+packaging/macos/   应用图标：SVG、iconset 和 OneOffice.icns
+docs/images/       本页用的界面截图和图标预览
 ```
 
 三个上游仓库不加入本仓库的 workspace。怎么嵌、怎么跟着上游改，写在 [`patches/README.md`](patches/README.md)。

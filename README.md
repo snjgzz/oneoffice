@@ -1,6 +1,6 @@
 # OneOffice
 
-文字、表格和演示放在同一个原生窗口里。界面以中文为主，用 Rust 和 egui 写成，文件留在你自己的电脑上。
+一个窗口里的文字、表格和演示。OneOffice 是集成壳，编辑来自 [storytold](https://github.com/storytold) 的 [wordcraft](https://github.com/storytold/wordcraft)、[gridcraft](https://github.com/storytold/gridcraft) 和 [deckcraft](https://github.com/storytold/deckcraft)。壳主要在这三家之上做一体窗口和中文体验。界面以中文为主，用 Rust 和 egui 写成，文件留在你自己的电脑上。
 
 <p align="center">
   <a href="LICENSE-MIT"><img alt="许可证：MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2F6FED"></a>
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#为什么选-oneoffice">为什么选</a> ·
+  <a href="#优势">优势</a> ·
   <a href="#功能">功能</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#系统要求">系统要求</a> ·
@@ -18,7 +18,7 @@
   <a href="#许可证与归属">许可证</a>
 </p>
 
-In short: one native window for a word processor, a spreadsheet and slides. The interface is mainly Chinese. It is not a LibreOffice-level office suite, and it is not an official WPS, Microsoft or storytold product.
+In short: a shell around storytold wordcraft, gridcraft and deckcraft. One window, a mainly Chinese interface, no ads. The release binary is about 130 MB with media codecs included, not a few-megabyte app. It is not a LibreOffice-level suite, and it is not an official WPS, Microsoft or storytold product.
 
 <p align="center">
   <img src="docs/images/app-icon.png" width="420" alt="OneOffice 图标：青绿到蓝的圆角底，白色粗体 O，后面是三份半透明文档。">
@@ -32,12 +32,13 @@ In short: one native window for a word processor, a spreadsheet and slides. The 
   <sub>Linux 上从源码跑起来的窗口：文字、表格、演示三个标签同时开着。</sub>
 </p>
 
-## 为什么选 OneOffice
+## 优势
 
-对照的是 WPS，不是功能上的一一对应。WPS 是一套商业办公软件，PDF、云文档、模板和会员都在里面。OneOffice 是一个窗口里的文字、表格和演示，免费、开源，许可证是 MIT OR Apache-2.0。格式能覆盖多少，见 [已知限制](#已知限制)。
+对照的是常见商业办公套件（例如 WPS），不是功能对等。PDF、云协作、模板和会员那些能力，这里没有。格式能覆盖多少，见 [已知限制](#已知限制)。
 
-- **没有广告，也没有会员入口。** 界面上不放推广，也不要求登录。金山办公宣布，2023-12-20 起 WPS Office 国内个人版关闭第三方商业广告（[IT之家当天的报道](https://www.ithome.com/0/740/399.htm)）。2025-07-22，金山办公在自己的社区里回复：第三方广告关了，界面上仍会展示 WPS 自己的新功能和付费权益优惠，并说明这不属于第三方广告（[讨论帖](https://bbs.wps.cn/topic/57864)）。OneOffice 没有这一层。
-- **体积更小，打开的就是这一个程序。** 本仓库的 release 二进制大约 130 MB，音视频解码器算在里面。腾讯软件中心列出的 Windows 版 WPS Office 12.1.0.28505 安装包是 292.66 MB，页面上的更新时间是 2026-09-01（[软件详情](https://pc.qq.com/detail/15/detail_1215.html)，2026-10-15 查阅）。WPS 官网繁体下载页写的下载大小是 5.1 MB、硬盘空间 200 MB 以上（[页面](https://zh-hant.wps.com/office/windows/)，2026-10-15 查阅）。5.1 MB 是在线安装引导，不是装好以后的体积。没有和 WPS 比过启动或编辑速度，所以这里不说谁更快。官方帮助里能查到关闭「办公助手」开机自启的步骤，页面标明的是 WPS Office 2019 PC 个人版（[学堂](https://www.wps.cn/learning/room/d/315960)）。OneOffice 的安装包不写开机启动项。
+- **无广告。** 界面上没有推广，也不要求登录。许可证是 MIT OR Apache-2.0。金山办公已在 2023-12-20 关闭 WPS 国内个人版的第三方商业广告（[IT之家](https://www.ithome.com/0/740/399.htm)）；2025-07-22 他们在社区说明，界面仍会展示 WPS 自己的新功能和付费优惠（[讨论帖](https://bbs.wps.cn/topic/57864)）。OneOffice 没有这一层。
+- **体积相对完整套件更小，但不是几 MB。** release 二进制大约 130 MB，音视频解码器算在里面。腾讯软件中心列出的 Windows 版 WPS Office 12.1.0.28505 安装包是 292.66 MB（页面更新时间 2026-09-01，[软件详情](https://pc.qq.com/detail/15/detail_1215.html)，2026-10-15 查阅）。WPS 官网繁体下载页写的下载大小是 5.1 MB、硬盘空间 200 MB 以上（[页面](https://zh-hant.wps.com/office/windows/)，2026-10-15 查阅）。5.1 MB 是在线安装引导，不是装好以后的体积。
+- **一个原生进程。** 打开的就是这个程序，没有另装开机启动或后台组件。官方帮助里能查到关闭「办公助手」开机自启的步骤，页面标明的是 WPS Office 2019 PC 个人版（[学堂](https://www.wps.cn/learning/room/d/315960)）。没有和 WPS 或 Microsoft Office 做过速度跑分，所以不写快几倍。
 
 ## 功能
 
@@ -59,7 +60,7 @@ In short: one native window for a word processor, a spreadsheet and slides. The 
 </tr>
 </table>
 
-编辑能力来自三个独立项目，嵌在对应标签里：[wordcraft](https://github.com/storytold/wordcraft)、[gridcraft](https://github.com/storytold/gridcraft)、[deckcraft](https://github.com/storytold/deckcraft)。OneOffice 提供窗口、标签和最近文件，不替代这三家自己的仓库。
+标签里的文字、表格和演示就是上面三个上游项目。OneOffice 提供窗口、标签和最近文件，不替代它们各自的仓库。
 
 ## 快速开始
 

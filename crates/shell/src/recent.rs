@@ -33,14 +33,56 @@ impl RecentFile {
     }
 
     pub fn modified_label(&self) -> String {
-        let ms = mtime_ms(&self.path).or(self.modified_ms);
-        let Some(ms) = ms else {
+        let Some(ms) = self.activity_ms() else {
             return "未知".to_owned();
         };
         let Some(modified) = ms_to_local(ms) else {
             return "未知".to_owned();
         };
         format_time(modified.naive_local(), Local::now().naive_local())
+    }
+
+    /// 分组和排序用的时间。优先磁盘修改时间，其次记下的修改时间，最后才是打开时间。
+    pub(crate) fn stamp_ms(&self) -> i64 {
+        self.activity_ms().unwrap_or(self.opened_ms)
+    }
+
+    fn activity_ms(&self) -> Option<i64> {
+        mtime_ms(&self.path).or(self.modified_ms)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RecentSpan {
+    Week,
+    Month,
+    Earlier,
+}
+
+impl RecentSpan {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Week => "7天内",
+            Self::Month => "1个月内",
+            Self::Earlier => "更早",
+        }
+    }
+}
+
+pub(crate) fn span_of_ms(ms: i64, now: NaiveDateTime) -> RecentSpan {
+    ms_to_local(ms)
+        .map(|modified| span_between(modified.naive_local(), now))
+        .unwrap_or(RecentSpan::Earlier)
+}
+
+fn span_between(modified: NaiveDateTime, now: NaiveDateTime) -> RecentSpan {
+    let days = (now.date() - modified.date()).num_days();
+    if days <= 7 {
+        RecentSpan::Week
+    } else if days <= 31 {
+        RecentSpan::Month
+    } else {
+        RecentSpan::Earlier
     }
 }
 
@@ -176,6 +218,31 @@ mod tests {
         assert_eq!(format_time(naive("2026-10-14 18:30"), now), "昨天 18:30");
         assert_eq!(format_time(naive("2026-10-12 09:00"), now), "10月12日");
         assert_eq!(format_time(naive("2025-10-08 09:00"), now), "2025年10月8日");
+    }
+
+    #[test]
+    fn recent_spans_follow_the_light_mock() {
+        let now = naive("2026-10-15 12:00");
+        assert_eq!(
+            span_between(naive("2026-10-15 14:22"), now),
+            RecentSpan::Week
+        );
+        assert_eq!(
+            span_between(naive("2026-10-08 09:00"), now),
+            RecentSpan::Week
+        );
+        assert_eq!(
+            span_between(naive("2026-10-07 09:00"), now),
+            RecentSpan::Month
+        );
+        assert_eq!(
+            span_between(naive("2026-09-14 09:00"), now),
+            RecentSpan::Month
+        );
+        assert_eq!(
+            span_between(naive("2026-08-30 09:00"), now),
+            RecentSpan::Earlier
+        );
     }
 
     #[test]

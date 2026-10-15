@@ -1,8 +1,8 @@
-//! 文档类型：文字、表格、演示。颜色与设计规范一致。
+//! 文档类型：文字、表格、演示。颜色与浅色定稿一致。
 
 use egui::Color32;
 
-use crate::theme::{BLUE, GREEN, NEUTRAL, ORANGE};
+use crate::theme::{self, DECK, DECK_INK, DOC, SHEET};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -39,14 +39,6 @@ impl DocKind {
         }
     }
 
-    pub fn badge(self) -> &'static str {
-        match self {
-            Self::Word => "W",
-            Self::Sheet => "S",
-            Self::Deck => "P",
-        }
-    }
-
     pub fn extension(self) -> &'static str {
         match self {
             Self::Word => "docx",
@@ -57,9 +49,25 @@ impl DocKind {
 
     pub fn color(self) -> Color32 {
         match self {
-            Self::Word => BLUE,
-            Self::Sheet => GREEN,
-            Self::Deck => ORANGE,
+            Self::Word => DOC,
+            Self::Sheet => SHEET,
+            Self::Deck => DECK,
+        }
+    }
+
+    /// 标签里演示图标的描边比底色更深一档，和定稿一致。
+    pub fn icon_ink(self) -> Color32 {
+        match self {
+            Self::Deck => DECK_INK,
+            _ => self.color(),
+        }
+    }
+
+    pub fn mark(self) -> theme::Mark {
+        match self {
+            Self::Word => theme::Mark::Doc,
+            Self::Sheet => theme::Mark::Sheet,
+            Self::Deck => theme::Mark::Deck,
         }
     }
 
@@ -129,26 +137,4 @@ impl DocKind {
             Self::Deck => &["幻灯片 1 / 1"],
         }
     }
-
-    /// 打开文件卡片上的副标题。
-    pub fn card_subtitle(self) -> &'static str {
-        match self {
-            Self::Word => "空白文档 · .docx",
-            Self::Sheet => "空白工作簿 · .xlsx",
-            Self::Deck => "空白演示 · .pptx",
-        }
-    }
-
-    pub fn new_label(self) -> &'static str {
-        match self {
-            Self::Word => "新建文字",
-            Self::Sheet => "新建表格",
-            Self::Deck => "新建演示",
-        }
-    }
-}
-
-/// 中性的「打开文件」卡片，不是一种文档类型。
-pub fn open_card_color() -> Color32 {
-    NEUTRAL
 }

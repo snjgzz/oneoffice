@@ -18,7 +18,6 @@ use crate::word::{self, WordEditor};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HomeView {
     Home,
-    Recent,
     Settings,
 }
 
@@ -28,6 +27,8 @@ pub(crate) struct Shell {
     pub(crate) home_view: HomeView,
     pub(crate) search: String,
     pub(crate) focus_search: bool,
+    pub(crate) recent_kind: Option<DocKind>,
+    pub(crate) recent_grid: bool,
     pub(crate) recent: RecentList,
     pub(crate) recent_path: PathBuf,
     next_id: u64,
@@ -88,6 +89,8 @@ impl Shell {
             home_view: HomeView::Home,
             search: String::new(),
             focus_search: false,
+            recent_kind: None,
+            recent_grid: false,
             recent: RecentList::load(&recent_path),
             recent_path,
             next_id: 1,
@@ -104,6 +107,15 @@ impl Shell {
             shell.open_existing(path);
         }
         shell
+    }
+
+    pub(crate) fn go_home(&mut self) {
+        self.active = 0;
+        self.home_view = HomeView::Home;
+    }
+
+    pub(crate) fn reload_recent(&mut self) {
+        self.recent = RecentList::load(&self.recent_path);
     }
 
     pub(crate) fn toggle_menu(&mut self, pos: Pos2) {
@@ -306,8 +318,7 @@ impl Shell {
             }
         });
         if home {
-            self.active = 0;
-            self.home_view = HomeView::Home;
+            self.go_home();
         }
         if search {
             self.active = 0;
@@ -461,6 +472,7 @@ impl eframe::App for Shell {
         // 这一帧如果立刻画，epaint 会因为缺具名族（deckcraft 的 bold）而 panic。
         let font_key = self.tabs.get(self.active).map(Tab::widget_id).unwrap_or(0);
         let fonts_ready = font_key == 0 || font_key == self.font_tab;
+        // 侧栏只在首页出现。文档标签占满顶栏下面的宽度。
         if home {
             egui::Panel::left("sidebar")
                 .exact_size(theme::SIDEBAR_W)
@@ -472,7 +484,7 @@ impl eframe::App for Shell {
                         .inner_margin(egui::Margin {
                             left: 12,
                             right: 12,
-                            top: 16,
+                            top: 14,
                             bottom: 12,
                         }),
                 )
@@ -480,12 +492,12 @@ impl eframe::App for Shell {
             egui::CentralPanel::default()
                 .frame(
                     egui::Frame::new()
-                        .fill(theme::BG)
+                        .fill(theme::WHITE)
                         .inner_margin(egui::Margin {
-                            left: 36,
-                            right: 36,
-                            top: 24,
-                            bottom: 24,
+                            left: 28,
+                            right: 28,
+                            top: 20,
+                            bottom: 16,
                         }),
                 )
                 .show(ui, |ui| self.show_home_main(ui));

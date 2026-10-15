@@ -358,9 +358,19 @@ impl Shell {
                     });
             });
 
-        let pressed_outside = ctx.input(|input| input.pointer.any_pressed())
-            && !area.response.hovered()
-            && !self.menu_just_opened;
+        // 菜单行盖在 Area 上，行被悬停时 Area 自己的 hovered() 是 false。
+        // 用它判断「点到外面」会在按下那一帧关掉菜单，松开时点不到行，新建不会发生。
+        let pointer_inside = ctx.input(|input| {
+            input
+                .pointer
+                .interact_pos()
+                .is_some_and(|pos| area.response.rect.contains(pos))
+        });
+        let pressed_outside = menu_press_is_outside(
+            self.menu_just_opened,
+            ctx.input(|input| input.pointer.any_pressed()),
+            pointer_inside,
+        );
         if action.is_some() || pressed_outside {
             self.menu = None;
         }
@@ -576,6 +586,11 @@ fn one_line(
     ui.painter().layout_job(job)
 }
 
+/// 按下指针时要不要关掉新建菜单。刚打开的那一帧不算，菜单矩形里的按下也不算。
+fn menu_press_is_outside(just_opened: bool, pressed: bool, pointer_inside_menu: bool) -> bool {
+    pressed && !pointer_inside_menu && !just_opened
+}
+
 fn menu_row(ui: &mut egui::Ui, label: &str) -> bool {
     let width = ui.available_width().max(168.0);
     let (rect, response) = ui.allocate_exact_size(vec2(width, 32.0), Sense::click());
@@ -636,7 +651,15 @@ fn cell_line(ui: &egui::Ui, draw: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::stacked_text_tops;
+    use super::{menu_press_is_outside, stacked_text_tops};
+
+    #[test]
+    fn pressing_a_menu_row_does_not_count_as_outside() {
+        assert!(!menu_press_is_outside(false, true, true));
+        assert!(menu_press_is_outside(false, true, false));
+        assert!(!menu_press_is_outside(true, true, false));
+        assert!(!menu_press_is_outside(false, false, false));
+    }
 
     #[test]
     fn card_title_and_subtitle_do_not_share_a_line() {

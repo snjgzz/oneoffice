@@ -11,13 +11,14 @@ mod home;
 mod kind;
 mod platform;
 mod recent;
+mod sheet;
 mod theme;
 
 pub use editor::{DocTab, DocumentEditor, Tab};
 pub use egui;
 pub use kind::DocKind;
 
-/// 启动主窗口。`paths` 里扩展名为 docx / xlsx / pptx 的现有文件会打开成标签，并写入最近列表。
+/// 启动主窗口。`paths` 里扩展名为 docx / xlsx / xlsm / xls / xlsb / ods / pptx 的现有文件会打开成标签，并写入最近列表。表格用 gridcraft。
 pub fn run(paths: Vec<String>) -> eframe::Result {
     app::run(paths)
 }

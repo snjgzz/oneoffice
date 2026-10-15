@@ -18,6 +18,10 @@ jobs:
         os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Apply gridcraft embed patch
+        run: tools/apply-gridcraft-patch.sh
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt

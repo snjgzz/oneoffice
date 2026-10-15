@@ -5,40 +5,39 @@
 //! `SlideApp::new(session, services)`，并且都有 `fn ui(&mut self, ui: &mut egui::Ui)`。
 //! gridcraft 的类型名是 `SheetApp`（设计稿里写的 GridApp 是同一层）。
 //!
-//! 它们现在假定自己独占窗口。嵌进来时包一层，实现 [`DocumentEditor`]，
-//! 把 `ui()` 画到壳给的区域里，而不是再开一个原生窗口。
+//! gridcraft 的 `SheetApp` 已经能画进壳给的区域。wordcraft / deckcraft 仍是占位。
+//! 编辑器只在界面线程上用，不要求 `Send`：`SheetApp` 的文件对话框回调不是 `Send`。
 
 use std::path::{Path, PathBuf};
 
 use crate::kind::DocKind;
 
-pub trait DocumentEditor: Send {
+pub trait DocumentEditor {
     fn kind(&self) -> DocKind;
     fn title(&self) -> &str;
     fn ui(&mut self, ui: &mut egui::Ui);
+    fn dirty(&self) -> bool {
+        false
+    }
+    fn save(&mut self) -> bool {
+        true
+    }
+    fn logic(&mut self, _ctx: &egui::Context) {}
+    fn path(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
-/// 一个文档标签。`editor` 现在是占位，以后换成对应的上游应用。
+/// 一个文档标签。文字和演示仍是占位；表格是 gridcraft 的 `SheetApp`。
 pub struct DocTab {
     id: u64,
-    title: String,
     path: Option<PathBuf>,
     editor: Box<dyn DocumentEditor>,
 }
 
 impl DocTab {
-    pub fn new(
-        id: u64,
-        title: impl Into<String>,
-        path: Option<PathBuf>,
-        editor: Box<dyn DocumentEditor>,
-    ) -> Self {
-        Self {
-            id,
-            title: title.into(),
-            path,
-            editor,
-        }
+    pub fn new(id: u64, path: Option<PathBuf>, editor: Box<dyn DocumentEditor>) -> Self {
+        Self { id, path, editor }
     }
 
     pub fn id(&self) -> u64 {
@@ -46,11 +45,31 @@ impl DocTab {
     }
 
     pub fn title(&self) -> &str {
-        &self.title
+        self.editor.title()
     }
 
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
+    }
+
+    pub fn set_path(&mut self, path: Option<PathBuf>) {
+        self.path = path;
+    }
+
+    pub fn dirty(&self) -> bool {
+        self.editor.dirty()
+    }
+
+    pub fn save(&mut self) -> bool {
+        self.editor.save()
+    }
+
+    pub fn logic(&mut self, ctx: &egui::Context) {
+        self.editor.logic(ctx);
+    }
+
+    pub fn editor_path(&self) -> Option<PathBuf> {
+        self.editor.path()
     }
 
     pub fn editor_mut(&mut self) -> &mut dyn DocumentEditor {
@@ -98,6 +117,39 @@ impl Tab {
         match self {
             Self::Home => 0,
             Self::Word(doc) | Self::Sheet(doc) | Self::Deck(doc) => doc.id(),
+        }
+    }
+
+    pub fn dirty(&self) -> bool {
+        match self {
+            Self::Home => false,
+            Self::Word(doc) | Self::Sheet(doc) | Self::Deck(doc) => doc.dirty(),
+        }
+    }
+
+    pub fn save(&mut self) -> bool {
+        match self {
+            Self::Home => true,
+            Self::Word(doc) | Self::Sheet(doc) | Self::Deck(doc) => doc.save(),
+        }
+    }
+
+    pub fn logic(&mut self, ctx: &egui::Context) {
+        if let Self::Word(doc) | Self::Sheet(doc) | Self::Deck(doc) = self {
+            doc.logic(ctx);
+        }
+    }
+
+    pub fn editor_path(&self) -> Option<PathBuf> {
+        match self {
+            Self::Home => None,
+            Self::Word(doc) | Self::Sheet(doc) | Self::Deck(doc) => doc.editor_path(),
+        }
+    }
+
+    pub fn set_path(&mut self, path: Option<PathBuf>) {
+        if let Self::Word(doc) | Self::Sheet(doc) | Self::Deck(doc) = self {
+            doc.set_path(path);
         }
     }
 

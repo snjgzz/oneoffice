@@ -1,30 +1,38 @@
 # OneOffice
 
-OneOffice 是一个类似 WPS 的集成办公套件外壳：文字、表格、演示共用一个原生窗口。这一版是主窗口壳，文档页还是占位；后面会把 [wordcraft](https://github.com/storytold/wordcraft)、[gridcraft](https://github.com/storytold/gridcraft)、[deckcraft](https://github.com/storytold/deckcraft) 嵌进标签。
+OneOffice 是一个类似 WPS 的集成办公套件外壳：文字、表格、演示共用一个原生窗口。表格标签嵌的是 [gridcraft](https://github.com/storytold/gridcraft) 的 `SheetApp`（功能区、编辑栏、网格、公式）。文字和演示还是占位，后面接 [wordcraft](https://github.com/storytold/wordcraft) 和 [deckcraft](https://github.com/storytold/deckcraft)。
 
-界面是中文。侧栏只有「首页」和「最近」，「设置」钉在底部。最近文件记在本机配置目录的 `recent.json` 里，只收通过打开动作进来的 `.docx` / `.xlsx` / `.pptx`。
+界面是中文。侧栏只有「首页」和「最近」，「设置」钉在底部。最近文件记在本机配置目录的 `recent.json` 里，收通过打开动作进来的 `.docx` / `.xlsx` / `.xlsm` / `.xls` / `.xlsb` / `.ods` / `.pptx`。`.xls`、`.xlsb`、`.ods` 由 gridcraft 导入，保存时写成 `.xlsx`。
 
 ## English
 
-OneOffice is the shared native window for a WPS-style office suite. This repository is the shell: a macOS-style tab bar, a home page, and placeholder document tabs. Word, spreadsheet, and presentation editing will later be the embedded egui apps from storytold/wordcraft (`WordApp`), gridcraft (`SheetApp`), and deckcraft (`SlideApp`). The UI is Chinese. Recent files are a real local JSON list of docx/xlsx/pptx opened from the native file dialog.
+OneOffice is the shared native window for a WPS-style office suite. Spreadsheet tabs embed storytold/gridcraft (`SheetApp`): ribbon, formula bar, grid, and formulas. Word and presentation tabs are still placeholders for wordcraft (`WordApp`) and deckcraft (`SlideApp`). The UI is Chinese. Recent files are a local JSON list of documents opened from the native file dialog.
 
 ## 在 Mac 上构建和运行
 
 需要 Rust 1.95 或更新（edition 2024）。[rustup](https://rustup.rs/) 的 stable 即可。Apple Silicon 是主要目标，Intel Mac 同一套代码也能编。
 
 ```sh
-git clone https://github.com/snjgzz/oneoffice
+git clone --recurse-submodules https://github.com/snjgzz/oneoffice
 cd oneoffice
+tools/apply-gridcraft-patch.sh
 cargo run -p oneoffice
+```
+
+已经克隆过、子模块是空的：
+
+```sh
+git submodule update --init --recursive
+tools/apply-gridcraft-patch.sh
 ```
 
 打开已有文件：
 
 ```sh
-cargo run -p oneoffice -- ~/Documents/计划.docx
+cargo run -p oneoffice -- ~/Documents/预算.xlsx
 ```
 
-扩展名必须是 docx、xlsx 或 pptx。文件会成为新标签，并写进最近列表。
+扩展名是 docx、xlsx、xlsm、xls、xlsb、ods 或 pptx。文件会成为新标签，并写进最近列表。表格可以编辑、计算公式，用 Ctrl+S / ⌘S 或功能区「文件」保存。没有路径的新工作簿会弹出另存为。
 
 最近列表的位置：
 
@@ -58,20 +66,21 @@ cargo run -p oneoffice
 ## 仓库结构
 
 ```
-crates/shell    可执行文件 oneoffice，以及同名库
+crates/shell          可执行文件 oneoffice，以及同名库
+vendor/gridcraft      storytold/gridcraft 子模块，固定提交
+patches/              嵌进壳所需的 gridcraft 补丁
 ```
 
-库导出 `DocKind`、`Tab` 和 `DocumentEditor`。以后的集成 crate 实现这个 trait，再放进 `Tab::Word` / `Tab::Sheet` / `Tab::Deck`。workspace 现在只有 shell，就是给那三个 crate 留的位置。
+库导出 `DocKind`、`Tab` 和 `DocumentEditor`。`Tab::Sheet` 使用 `SheetEditor`，里面每个标签一份 `SheetApp`。文字和演示仍是 `PlaceholderEditor`。gridcraft 不加入本仓库的 workspace members，它自己的 `Cargo.toml` 继续解析 `.workspace = true`。
 
-`DocumentEditor::ui` 对齐上游已经公开的形状：`WordApp::ui`、`SheetApp::ui`、`SlideApp::ui`。上游目前假定自己独占窗口；嵌进来之前要改成往壳给的 `Ui` 里画，不再自己管标题栏和窗口循环。
+嵌入补丁让 `SheetApp` 在 `embed_salt` 有值时去掉自己的标题栏、窗口标题和主题/缩放接管，并把面板和编辑器的 egui id 按标签隔开。补丁内容和更新方法在 `patches/README.md`。
 
 ## 路线图
 
-1. 主窗口壳（当前）。
-2. 让 wordcraft、gridcraft、deckcraft 的 `ui()` 能画进父级 `Ui`，不再各开一个 eframe 窗口。
-3. 增加集成 crate：构造 `WordApp::new(session, services)`、`SheetApp::new(session, services)`、`SlideApp::new(session, services)`，套上 `DocumentEditor`。
-4. 「新建」和「打开」接到真正的 session，而不是占位页。
-5. 未保存标记，以及关闭未保存标签时的确认。
+1. 主窗口壳。
+2. gridcraft 嵌进表格标签（当前）：打开、编辑、公式、保存、多个表格标签。
+3. 用同样的方式嵌 wordcraft（`WordApp`）和 deckcraft（`SlideApp`）。
+4. 关闭未保存的文字/演示标签时的确认（表格已经有）。
 
 ## 许可证
 
@@ -83,6 +92,6 @@ crates/shell    可执行文件 oneoffice，以及同名库
 
 OneOffice 不隶属于 WPS、Microsoft 或 storytold。
 
-嵌入 wordcraft、gridcraft、deckcraft 时，保留它们的版权声明和 MIT OR Apache-2.0 许可证，不删文件头。仓库会加一份 `NOTICE`，写明这三个上游项目的名称、仓库地址和许可证。不使用它们的商标做背书。
+gridcraft 以子模块形式放在 `vendor/gridcraft`，版权和 MIT OR Apache-2.0 许可证保留在它自己的仓库里。`NOTICE` 写了项目名、仓库地址、固定的提交和许可证。不使用 GridCraft / ArtCraft 的商标做背书。wordcraft 和 deckcraft 接进来时同样处理。
 
 Noto Sans SC 只作为界面字体打包，按 OFL 随附许可证；不把保留名 Source 用在衍生字体上。

@@ -1,0 +1,3 @@
+[submodule "vendor/gridcraft"]
+	path = vendor/gridcraft
+	url = https://github.com/storytold/gridcraft.git

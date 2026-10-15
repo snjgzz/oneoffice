@@ -1,0 +1,21 @@
+OneOffice
+Copyright (c) 2026 OneOffice contributors.
+Licensed under the MIT License or the Apache License, Version 2.0, at your option
+(LICENSE-MIT, LICENSE-APACHE).
+
+The interface font is Noto Sans SC Regular 2.004, subsetted, under the SIL Open Font
+License 1.1. Copyright 2014-2021 Adobe. The reserved font name is Source. See
+crates/shell/assets/fonts/OFL.txt.
+
+Third-party software
+
+GridCraft
+https://github.com/storytold/gridcraft
+Copyright (c) 2026 ArtCraft Team and the GridCraft contributors.
+Licensed under the MIT License or the Apache License, Version 2.0, at your option.
+Vendored as a git submodule at vendor/gridcraft, pinned to
+e6b6b349708ab4978cb3f061f6bd6ecbc25667cb.
+OneOffice applies patches/gridcraft-embed.patch so SheetApp can render inside a
+document tab. Upstream copyright notices and license files are kept in the submodule.
+The ArtCraft name, wordmark and logos are trademarks of the ArtCraft Team and are
+not used by OneOffice.

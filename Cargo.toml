@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/shell"]
+# gridcraft is its own workspace. Excluding it lets its crates keep `.workspace = true`
+# against vendor/gridcraft/Cargo.toml instead of this file.
+exclude = ["vendor/gridcraft"]
 
 [workspace.package]
 version = "0.1.0"

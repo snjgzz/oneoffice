@@ -33,14 +33,16 @@ pub const TRAFFIC_GUTTER: f32 = 78.0;
 pub const TAB_BAR_H: f32 = 40.0;
 pub const SIDEBAR_W: f32 = 220.0;
 
+pub fn cjk_font_bytes() -> &'static [u8] {
+    include_bytes!("../assets/fonts/NotoSansSC-Regular.subset.otf")
+}
+
 pub fn install(ctx: &egui::Context) {
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         "noto_sans_sc".to_owned(),
         Arc::new(FontData {
-            font: Cow::Borrowed(include_bytes!(
-                "../assets/fonts/NotoSansSC-Regular.subset.otf"
-            )),
+            font: Cow::Borrowed(cjk_font_bytes()),
             index: 0,
             tweak: FontTweak::default(),
         }),

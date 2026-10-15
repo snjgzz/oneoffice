@@ -1,6 +1,7 @@
 //! 壳的状态：标签、最近文件、快捷键。
 
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use egui::{Modifiers, Pos2, ViewportCommand};
 
@@ -10,6 +11,7 @@ use crate::editor::{DocTab, Tab};
 use crate::kind::DocKind;
 use crate::platform;
 use crate::recent::RecentList;
+use crate::sheet::{self, SheetEditor};
 use crate::theme::{self, BG};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -32,6 +34,9 @@ pub(crate) struct Shell {
     pub(crate) menu: Option<Pos2>,
     pub(crate) menu_just_opened: bool,
     sent_title: String,
+    sheet_opens: Arc<Mutex<Vec<PathBuf>>>,
+    pending_close: Option<usize>,
+    logic_tab: usize,
 }
 
 pub(crate) fn run(paths: Vec<String>) -> eframe::Result {
@@ -46,6 +51,7 @@ pub(crate) fn run(paths: Vec<String>) -> eframe::Result {
         options,
         Box::new(move |cc| {
             theme::install(&cc.egui_ctx);
+            sheet::register_cjk_font();
             Ok(Box::new(Shell::new(paths)) as Box<dyn eframe::App>)
         }),
     )
@@ -84,6 +90,9 @@ impl Shell {
             menu: None,
             menu_just_opened: false,
             sent_title: String::new(),
+            sheet_opens: Arc::new(Mutex::new(Vec::new())),
+            pending_close: None,
+            logic_tab: 0,
         };
         for path in paths {
             shell.open_existing(path);
@@ -114,7 +123,13 @@ impl Shell {
     pub(crate) fn open_dialog(&mut self) {
         let picked = rfd::FileDialog::new()
             .set_title("打开文件")
-            .add_filter("Office 文档", &["docx", "xlsx", "pptx"])
+            .add_filter(
+                "Office 文档",
+                &["docx", "xlsx", "xlsm", "xls", "xlsb", "ods", "pptx"],
+            )
+            .add_filter("表格", &["xlsx", "xlsm", "xls", "xlsb", "ods"])
+            .add_filter("文字", &["docx"])
+            .add_filter("演示", &["pptx"])
             .pick_file();
         if let Some(path) = picked {
             self.open_existing(path);
@@ -150,11 +165,38 @@ impl Shell {
         if index == 0 || index >= self.tabs.len() {
             return;
         }
+        if self.tabs[index].dirty() {
+            self.pending_close = Some(index);
+            return;
+        }
+        self.remove_tab(index);
+    }
+
+    fn remove_tab(&mut self, index: usize) {
+        if index == 0 || index >= self.tabs.len() {
+            return;
+        }
         self.tabs.remove(index);
         if self.active > index {
             self.active -= 1;
         } else if self.active >= self.tabs.len() {
             self.active = self.tabs.len() - 1;
+        }
+        if self.logic_tab > index {
+            self.logic_tab -= 1;
+        } else if self.logic_tab >= self.tabs.len() {
+            self.logic_tab = self.tabs.len() - 1;
+        }
+    }
+
+    fn confirm_save_and_close(&mut self) {
+        let Some(index) = self.pending_close else {
+            return;
+        };
+        let saved = self.tabs.get_mut(index).is_some_and(Tab::save);
+        if saved {
+            self.pending_close = None;
+            self.remove_tab(index);
         }
     }
 
@@ -170,8 +212,17 @@ impl Shell {
         }
         let id = self.next_id;
         self.next_id += 1;
-        let editor = Box::new(PlaceholderEditor::new(id, kind, title.clone()));
-        let doc = DocTab::new(id, title, path, editor);
+        let editor: Box<dyn crate::editor::DocumentEditor> = match kind {
+            DocKind::Sheet => {
+                let sheet = match &path {
+                    Some(path) => SheetEditor::open(id, path, Arc::clone(&self.sheet_opens)),
+                    None => SheetEditor::blank(id, title, Arc::clone(&self.sheet_opens)),
+                };
+                Box::new(sheet)
+            }
+            DocKind::Word | DocKind::Deck => Box::new(PlaceholderEditor::new(id, kind, title)),
+        };
+        let doc = DocTab::new(id, path, editor);
         let tab = match kind {
             DocKind::Word => Tab::Word(doc),
             DocKind::Sheet => Tab::Sheet(doc),
@@ -186,6 +237,19 @@ impl Shell {
     }
 
     fn handle_shortcuts(&mut self, ctx: &egui::Context) {
+        if self.pending_close.is_some() {
+            let mut cancel = false;
+            ctx.input_mut(|input| {
+                cancel = input.consume_key(Modifiers::NONE, egui::Key::Escape);
+                input.events.retain(|event| {
+                    !matches!(event, egui::Event::Key { .. } | egui::Event::Text(_))
+                });
+            });
+            if cancel {
+                self.pending_close = None;
+            }
+            return;
+        }
         let command = Modifiers::COMMAND;
         let mut home = false;
         let mut close = false;
@@ -255,11 +319,90 @@ impl Shell {
             self.sent_title = title;
         }
     }
+
+    fn drain_sheet_opens(&mut self) {
+        let queued = std::mem::take(
+            &mut *self
+                .sheet_opens
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for path in queued {
+            self.open_existing(path);
+        }
+    }
+
+    fn note_saved_path(&mut self) {
+        let Some(path) = self.tabs.get(self.active).and_then(Tab::editor_path) else {
+            return;
+        };
+        if self.tabs.get(self.active).and_then(Tab::path) == Some(path.as_path()) {
+            return;
+        }
+        if let Some(tab) = self.tabs.get_mut(self.active) {
+            tab.set_path(Some(path.clone()));
+        }
+        if self.recent.record_open(path) {
+            self.recent.save(&self.recent_path);
+        }
+    }
+
+    fn show_close_prompt(&mut self, ctx: &egui::Context) {
+        let Some(index) = self.pending_close else {
+            return;
+        };
+        let title = self
+            .tabs
+            .get(index)
+            .map(|tab| tab.title().to_owned())
+            .unwrap_or_default();
+        let mut action = None;
+        egui::Modal::new(egui::Id::new("oneoffice-close")).show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.label(format!("「{title}」有未保存的更改。"));
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui.button("保存").clicked() {
+                    action = Some(1);
+                }
+                if ui.button("不保存").clicked() {
+                    action = Some(2);
+                }
+                if ui.button("取消").clicked() {
+                    action = Some(0);
+                }
+            });
+        });
+        if action == Some(1) {
+            self.confirm_save_and_close();
+        } else if action == Some(2) {
+            if let Some(index) = self.pending_close.take() {
+                self.remove_tab(index);
+            }
+        } else if action == Some(0) {
+            self.pending_close = None;
+        }
+    }
 }
 
 impl eframe::App for Shell {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         BG.to_normalized_gamma_f32()
+    }
+
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.drain_sheet_opens();
+        if self.active != self.logic_tab {
+            egui::Popup::close_all(ctx);
+            let focused = ctx.memory(|memory| memory.focused());
+            if let Some(id) = focused {
+                ctx.memory_mut(|memory| memory.surrender_focus(id));
+            }
+            self.logic_tab = self.active;
+        }
+        if let Some(tab) = self.tabs.get_mut(self.active) {
+            tab.logic(ctx);
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -315,7 +458,9 @@ impl eframe::App for Shell {
                 });
         }
 
+        self.note_saved_path();
         self.show_new_menu(ui.ctx());
+        self.show_close_prompt(ui.ctx());
         self.sync_title(ui.ctx());
     }
 }

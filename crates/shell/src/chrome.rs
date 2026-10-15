@@ -161,8 +161,11 @@ fn tab_chip(ui: &mut egui::Ui, rect: Rect, tab: &Tab, selected: bool) -> TabHit 
     }
 
     let text_left = rect.left() + 10.0 + 18.0 + 8.0;
+    let dirty = tab.dirty();
     let text_right = if tab.is_home() {
         rect.right() - 10.0
+    } else if dirty {
+        rect.right() - 40.0
     } else {
         rect.right() - 28.0
     };
@@ -182,6 +185,11 @@ fn tab_chip(ui: &mut egui::Ui, rect: Rect, tab: &Tab, selected: bool) -> TabHit 
 
     let mut hit = TabHit::None;
     if !tab.is_home() {
+        if dirty {
+            let dot = pos2(rect.right() - 34.0, rect.center().y);
+            let color = tab.kind().map(|kind| kind.color()).unwrap_or(TEXT);
+            painter.circle_filled(dot, 3.5, color);
+        }
         let close_rect =
             Rect::from_min_max(pos2(rect.right() - 24.0, rect.top()), rect.right_bottom());
         let close = ui.interact(

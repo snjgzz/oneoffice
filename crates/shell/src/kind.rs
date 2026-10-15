@@ -17,7 +17,7 @@ impl DocKind {
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
         match ext.as_str() {
             "docx" => Some(Self::Word),
-            "xlsx" => Some(Self::Sheet),
+            "xlsx" | "xlsm" | "xls" | "xlsb" | "ods" => Some(Self::Sheet),
             "pptx" => Some(Self::Deck),
             _ => None,
         }

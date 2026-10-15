@@ -1,6 +1,6 @@
 # OneOffice
 
-一个窗口里的文字、表格和演示。OneOffice 是集成壳，编辑来自 [storytold](https://github.com/storytold) 的 [wordcraft](https://github.com/storytold/wordcraft)、[gridcraft](https://github.com/storytold/gridcraft) 和 [deckcraft](https://github.com/storytold/deckcraft)。壳主要在这三家之上做一体窗口和中文体验。界面以中文为主，用 Rust 和 egui 写成，文件留在你自己的电脑上。
+一个窗口里的文字、表格和演示。编辑来自 [storytold](https://github.com/storytold) 的 [wordcraft](https://github.com/storytold/wordcraft)、[gridcraft](https://github.com/storytold/gridcraft) 和 [deckcraft](https://github.com/storytold/deckcraft)。OneOffice 是把这三家放在一起的主程序，主要做一体窗口和中文体验。界面以中文为主，用 Rust 和 egui 写成，文件留在你自己的电脑上。
 
 <p align="center">
   <a href="LICENSE-MIT"><img alt="许可证：MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2F6FED"></a>
@@ -18,7 +18,7 @@
   <a href="#许可证与归属">许可证</a>
 </p>
 
-In short: a shell around storytold wordcraft, gridcraft and deckcraft. One window, a mainly Chinese interface, no ads. The release binary is about 130 MB with media codecs included, not a few-megabyte app. It is not a LibreOffice-level suite, and it is not an official WPS, Microsoft or storytold product.
+In short: one program that puts storytold wordcraft, gridcraft and deckcraft in a single window, with a mainly Chinese interface and no ads. The release binary is about 130 MB with media codecs included, not a few-megabyte app. It is not a LibreOffice-level suite, and it is not an official WPS, Microsoft or storytold product.
 
 <p align="center">
   <img src="docs/images/app-icon.png" width="420" alt="OneOffice 图标：青绿到蓝的圆角底，白色粗体 O，后面是三份半透明文档。">
@@ -43,7 +43,7 @@ In short: a shell around storytold wordcraft, gridcraft and deckcraft. One windo
 ## 功能
 
 - **三种文档，一个窗口。** 文字、表格、演示各自一个标签，可以一起开着，用 ⌘1–9 切换。每种都能打开、编辑、保存。
-- **中文界面。** 壳、文字和表格的功能区是中文。演示的功能区目前仍是英文，幻灯片里的中文可以显示。
+- **界面以中文为主。** 文字和表格的功能区是中文；演示的功能区目前仍是英文，幻灯片里的中文可以正常显示。
 - **常见 Office 文件。** 打开 `.doc`、`.docx`、`.xlsx`、`.xlsm`、`.xls`、`.xlsb`、`.ods`、`.pptx`。旧格式和新格式的保存方式不一样，见 [已知限制](#已知限制)。
 - **最近文件在本机。** 从打开对话框进来的文件记在配置目录的 `recent.json` 里，没有账号。
 
@@ -145,7 +145,7 @@ sudo apt-get install -y pkg-config libgtk-3-dev libxcb-render0-dev libxcb-shape0
 
 ## 快捷键
 
-修饰键在 macOS 上是 ⌘，在 Linux 上是 Ctrl。⌘S / Ctrl+S 留给当前文档保存，壳不拦截。
+修饰键在 macOS 上是 ⌘，在 Linux 上是 Ctrl。⌘S / Ctrl+S 留给当前文档保存，主程序不拦截。
 
 | 按键 | 作用 |
 | --- | --- |
@@ -178,7 +178,7 @@ crates/shell       可执行文件 oneoffice，以及同名库
 vendor/wordcraft   storytold/wordcraft，固定在某一提交
 vendor/gridcraft   storytold/gridcraft，固定在某一提交
 vendor/deckcraft   storytold/deckcraft，固定在某一提交
-patches/           把三个编辑器嵌进壳的补丁
+patches/           把三个编辑器嵌进主程序的补丁
 tools/             打补丁的脚本，以及字体子集工具
 packaging/macos/   应用图标，以及未签名 .dmg 的打包脚本
 packaging/windows/ NSIS 安装脚本（x86_64）
